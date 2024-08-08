@@ -9,16 +9,12 @@ from scrapegraphai.utils import prettify_exec_info
 
 graph_config = {
     "llm": {
-        "model": "ollama/mistral",
+        "model": "ollama/llama3.1",
         "temperature": 0,
         "format": "json",  # Ollama needs the format to be specified explicitly
         # "base_url": "http://localhost:11434", # set ollama URL arbitrarily
     },
-    "embeddings": {
-        "model": "ollama/nomic-embed-text",
-        "temperature": 0,
-        # "base_url": "http://localhost:11434",  # set ollama URL arbitrarily
-    },
+  
     "verbose": True,
     "headless": False
 }
@@ -26,11 +22,9 @@ graph_config = {
 # ************************************************
 # Create the SmartScraperGraph instance and run it
 # ************************************************
-
 smart_scraper_graph = SmartScraperGraph(
-    prompt="List me all the titles",
-    # also accepts a string with the already downloaded HTML code
-    source="https://www.wired.com/",
+    prompt="Find some information about what does the company do, the name and a contact email.",
+    source="https://scrapegraphai.com/",
     config=graph_config
 )
 

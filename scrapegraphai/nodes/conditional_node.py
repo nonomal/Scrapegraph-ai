@@ -1,9 +1,8 @@
 """ 
 Module for implementing the conditional node
 """
-
+from typing import Optional, List
 from .base_node import BaseNode
-
 
 class ConditionalNode(BaseNode):
     """
@@ -14,7 +13,7 @@ class ConditionalNode(BaseNode):
     This node type is used to implement branching logic within the graph, allowing 
     for dynamic paths based on the data available in the current state.
 
-    It is expected thar exactly two edges are created out of this node.
+    It is expected that exactly two edges are created out of this node.
     The first node is chosen for execution if the key exists and has a non-empty value,
     and the second node is chosen if the key does not exist or is empty.
 
@@ -29,7 +28,12 @@ class ConditionalNode(BaseNode):
 
     """
 
-    def __init__(self, key_name: str, node_name="ConditionalNode"):
+    def __init__(self,
+        input: str,
+        output: List[str],
+        node_config: Optional[dict] = None,
+        node_name: str = "GenerateAnswerCSV",
+    ):
         """
         Initializes the node with the key to check and the next node names based on the condition.
 
@@ -37,8 +41,8 @@ class ConditionalNode(BaseNode):
             key_name (str): The name of the key to check in the state.
         """
 
-        super().__init__(node_name, "conditional_node")
-        self.key_name = key_name
+       super().__init__(node_name, "node", input, output, 2, node_config)
+
 
     def execute(self, state: dict) -> dict:
         """

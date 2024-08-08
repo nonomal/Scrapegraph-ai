@@ -9,7 +9,6 @@ from scrapegraphai.utils import prettify_exec_info
 
 load_dotenv()
 
-
 # ************************************************
 # Define the configuration for the graph
 # ************************************************
@@ -21,11 +20,6 @@ graph_config = {
         "model": "groq/gemma-7b-it",
         "api_key": groq_key,
         "temperature": 0
-    },
-     "embeddings": {
-        "model": "ollama/nomic-embed-text",
-        "temperature": 0,
-        # "base_url": "http://localhost:11434",  # set ollama URL arbitrarily
     },
     "headless": False
 }

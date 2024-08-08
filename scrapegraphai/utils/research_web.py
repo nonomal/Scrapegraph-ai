@@ -1,5 +1,5 @@
 """
-research web module
+Research_web module
 """
 import re
 from typing import List
@@ -8,27 +8,27 @@ from googlesearch import search as google_search
 import requests
 from bs4 import BeautifulSoup
 
-def search_on_web(query: str, search_engine: str = "Google", max_results: int = 10) -> List[str]:
+def search_on_web(query: str, search_engine: str = "Google", 
+                  max_results: int = 10, port: int = 8080) -> List[str]:
     """
     Searches the web for a given query using specified search engine options.
 
     Args:
         query (str): The search query to find on the internet.
-        search_engine (str, optional): Specifies the search engine to use, options include 'Google', 'DuckDuckGo', or 'Bing'. Default is 'Google'.
+        search_engine (str, optional): Specifies the search engine to use, 
+        options include 'Google', 'DuckDuckGo', 'Bing', or 'SearXNG'. Default is 'Google'.
         max_results (int, optional): The maximum number of search results to return.
+        port (int, optional): The port number to use when searching with 'SearXNG'. Default is 8080.
 
     Returns:
         List[str]: A list of URLs as strings that are the search results.
 
     Raises:
-        ValueError: If the search engine specified is neither 'Google', 'DuckDuckGo', nor 'Bing'.
+        ValueError: If the search engine specified is not supported.
 
     Example:
         >>> search_on_web("example query", search_engine="Google", max_results=5)
         ['http://example.com', 'http://example.org', ...]
-
-    This function allows switching between Google, DuckDuckGo, and Bing to perform 
-    internet searches, returning a list of result URLs.
     """
 
     if search_engine.lower() == "google":
@@ -58,4 +58,17 @@ def search_on_web(query: str, search_engine: str = "Google", max_results: int = 
             search_results.append(link)
         return search_results
 
-    raise ValueError("The only search engines available are DuckDuckGo, Google, or Bing")
+    elif search_engine.lower() == "searxng":
+        url = f"http://localhost:{port}"
+        params = {"q": query, "format": "json"}
+
+        # Send the GET request to the server
+        response = requests.get(url, params=params)
+
+        # Parse the response and limit to the specified max_results
+        data = response.json()
+        limited_results = data["results"][:max_results]
+        return limited_results
+
+    else:
+        raise ValueError("The only search engines available are DuckDuckGo, Google, Bing, or SearXNG")

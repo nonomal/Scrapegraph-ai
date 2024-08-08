@@ -10,7 +10,7 @@ from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.runnables import RunnableParallel
 from tqdm import tqdm
-from ..models import Ollama
+from langchain_community.chat_models import ChatOllama
 # Imports from the library
 from .base_node import BaseNode
 from ..helpers.generate_answer_node_omni_prompts import template_no_chunk_omni, template_chunks_omni, template_merge_omni
@@ -44,12 +44,14 @@ class GenerateAnswerOmniNode(BaseNode):
         super().__init__(node_name, "node", input, output, 3, node_config)
 
         self.llm_model = node_config["llm_model"]
-        if isinstance(node_config["llm_model"], Ollama):
+        if isinstance(node_config["llm_model"], ChatOllama):
             self.llm_model.format="json"
-            
+
         self.verbose = (
             False if node_config is None else node_config.get("verbose", False)
         )
+
+        self.additional_info = node_config.get("additional_info")
 
     def execute(self, state: dict) -> dict:
         """
@@ -85,35 +87,44 @@ class GenerateAnswerOmniNode(BaseNode):
             output_parser = JsonOutputParser(pydantic_object=self.node_config["schema"])
         else:
             output_parser = JsonOutputParser()
+        template_no_chunk_omni_prompt = template_no_chunk_omni
+        template_chunks_omni_prompt = template_chunks_omni
+        template_merge_omni_prompt= template_merge_omni
+
+        if self.additional_info is not None:
+            template_no_chunk_omni_prompt = self.additional_info + template_no_chunk_omni_prompt
+            template_chunks_omni_prompt = self.additional_info + template_chunks_omni_prompt
+            template_merge_omni_prompt = self.additional_info + template_merge_omni_prompt
 
         format_instructions = output_parser.get_format_instructions()
 
 
         chains_dict = {}
+        if len(doc) == 1:
+            prompt = PromptTemplate(
+                template=template_no_chunk_omni_prompt,
+                input_variables=["question"],
+                partial_variables={
+                    "context": doc,
+                    "format_instructions": format_instructions,
+                    "img_desc": imag_desc,
+                },
+            )
 
-        # Use tqdm to add progress bar
+            chain =  prompt | self.llm_model | output_parser
+            answer = chain.invoke({"question": user_prompt})
+
+            state.update({self.output[0]: answer})
+            return state
+
         for i, chunk in enumerate(
             tqdm(doc, desc="Processing chunks", disable=not self.verbose)
         ):
-            if len(doc) == 1:
-                prompt = PromptTemplate(
-                    template=template_no_chunk_omni,
+            prompt = PromptTemplate(
+                    template=template_chunks_omni_prompt,
                     input_variables=["question"],
                     partial_variables={
-                        "context": chunk.page_content,
-                        "format_instructions": format_instructions,
-                        "img_desc": imag_desc,
-                    },
-                )
-
-                chain =  prompt | self.llm_model | output_parser
-                answer = chain.invoke({"question": user_prompt})
-            else:
-                prompt = PromptTemplate(
-                    template=template_chunks_omni,
-                    input_variables=["question"],
-                    partial_variables={
-                        "context": chunk.page_content,
+                        "context": chunk,
                         "chunk_id": i + 1,
                         "format_instructions": format_instructions,
                     },
@@ -123,23 +134,18 @@ class GenerateAnswerOmniNode(BaseNode):
             chain_name = f"chunk{i+1}"
             chains_dict[chain_name] = prompt | self.llm_model | output_parser
 
-        if len(chains_dict) > 1:
-            # Use dictionary unpacking to pass the dynamically named chains to RunnableParallel
-            map_chain = RunnableParallel(**chains_dict)
-            # Chain
-            answer = map_chain.invoke({"question": user_prompt})
-            # Merge the answers from the chunks
-            merge_prompt = PromptTemplate(
-                template=template_merge_omni,
-                input_variables=["context", "question"],
-                partial_variables={
-                    "format_instructions": format_instructions,
-                    "img_desc": imag_desc,
-                },
-            )
-            merge_chain = merge_prompt | self.llm_model | output_parser
-            answer = merge_chain.invoke({"context": answer, "question": user_prompt})
+        async_runner = RunnableParallel(**chains_dict)
 
-        # Update the state with the generated answer
+        batch_results =  async_runner.invoke({"question": user_prompt})
+
+        merge_prompt = PromptTemplate(
+                template = template_merge_omni_prompt,
+                input_variables=["context", "question"],
+                partial_variables={"format_instructions": format_instructions},
+            )
+
+        merge_chain = merge_prompt | self.llm_model | output_parser
+        answer = merge_chain.invoke({"context": batch_results, "question": user_prompt})
+
         state.update({self.output[0]: answer})
         return state

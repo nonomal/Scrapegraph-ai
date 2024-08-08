@@ -3,18 +3,12 @@ gg
 Module for generating the answer node
 """
 
-# Imports from standard library
 from typing import List, Optional
-
-# Imports from Langchain
 from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.runnables import RunnableParallel
 from tqdm import tqdm
-
 from ..utils.logging import get_logger
-
-# Imports from the library
 from .base_node import BaseNode
 from ..helpers.generate_answer_node_csv_prompts import template_chunks_csv, template_no_chunks_csv, template_merge_csv
 
@@ -58,11 +52,14 @@ class GenerateAnswerCSVNode(BaseNode):
             node_name (str): name of the node
         """
         super().__init__(node_name, "node", input, output, 2, node_config)
-        
+
         self.llm_model = node_config["llm_model"]
+
         self.verbose = (
             False if node_config is None else node_config.get("verbose", False)
         )
+
+        self.additional_info = node_config.get("additional_info")
 
     def execute(self, state):
         """
@@ -100,55 +97,62 @@ class GenerateAnswerCSVNode(BaseNode):
         else:
             output_parser = JsonOutputParser()
 
+        template_no_chunks_csv_prompt = template_no_chunks_csv
+        template_chunks_csv_prompt = template_chunks_csv
+        template_merge_csv_prompt  = template_merge_csv
+
+        if self.additional_info is not None:
+            template_no_chunks_csv_prompt = self.additional_info + template_no_chunks_csv
+            template_chunks_csv_prompt = self.additional_info + template_chunks_csv
+            template_merge_csv_prompt = self.additional_info + template_merge_csv
+
         format_instructions = output_parser.get_format_instructions()
-   
+
         chains_dict = {}
 
-        # Use tqdm to add progress bar
+        if len(doc) == 1:
+            prompt = PromptTemplate(
+                template=template_no_chunks_csv_prompt,
+                input_variables=["question"],
+                partial_variables={
+                    "context": doc,
+                    "format_instructions": format_instructions,
+                },
+            )
+
+            chain =  prompt | self.llm_model | output_parser
+            answer = chain.invoke({"question": user_prompt})
+            state.update({self.output[0]: answer})
+            return state
+
         for i, chunk in enumerate(
             tqdm(doc, desc="Processing chunks", disable=not self.verbose)
         ):
-            if len(doc) == 1:
-                prompt = PromptTemplate(
-                    template=template_no_chunks_csv,
+            prompt = PromptTemplate(
+                    template=template_chunks_csv_prompt,
                     input_variables=["question"],
                     partial_variables={
-                        "context": chunk.page_content,
-                        "format_instructions": format_instructions,
-                    },
-                )
-
-                chain =  prompt | self.llm_model | output_parser
-                answer = chain.invoke({"question": user_prompt})
-            else:
-                prompt = PromptTemplate(
-                    template=template_chunks_csv,
-                    input_variables=["question"],
-                    partial_variables={
-                        "context": chunk.page_content,
+                        "context": chunk,
                         "chunk_id": i + 1,
                         "format_instructions": format_instructions,
                     },
                 )
 
-            # Dynamically name the chains based on their index
             chain_name = f"chunk{i+1}"
             chains_dict[chain_name] = prompt | self.llm_model | output_parser
 
-        if len(chains_dict) > 1:
-            # Use dictionary unpacking to pass the dynamically named chains to RunnableParallel
-            map_chain = RunnableParallel(**chains_dict)
-            # Chain
-            answer = map_chain.invoke({"question": user_prompt})
-            # Merge the answers from the chunks
-            merge_prompt = PromptTemplate(
-                template=template_merge_csv,
+        async_runner = RunnableParallel(**chains_dict)
+
+        batch_results =  async_runner.invoke({"question": user_prompt})
+
+        merge_prompt = PromptTemplate(
+                template = template_merge_csv_prompt,
                 input_variables=["context", "question"],
                 partial_variables={"format_instructions": format_instructions},
             )
-            merge_chain = merge_prompt | self.llm_model | output_parser
-            answer = merge_chain.invoke({"context": answer, "question": user_prompt})
 
-        # Update the state with the generated answer
+        merge_chain = merge_prompt | self.llm_model | output_parser
+        answer = merge_chain.invoke({"context": batch_results, "question": user_prompt})
+
         state.update({self.output[0]: answer})
         return state
