@@ -2,25 +2,23 @@
 SearchLinkNode Module
 """
 
-# Imports from standard library
+import re
 from typing import List, Optional
+from urllib.parse import parse_qs, urlparse
+
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
 from tqdm import tqdm
 
-# Imports from Langchain
-from langchain.prompts import PromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.runnables import RunnableParallel
-
-from ..utils.logging import get_logger
-
-# Imports from the library
+from ..helpers import default_filters
+from ..prompts import TEMPLATE_RELEVANT_LINKS
 from .base_node import BaseNode
 
 
 class SearchLinkNode(BaseNode):
     """
     A node that can filter out the relevant links in the webpage content for the user prompt.
-    Node expects the aleready scrapped links on the webpage and hence it is expected
+    Node expects the already scrapped links on the webpage and hence it is expected
     that this node be used after the FetchNode.
 
     Attributes:
@@ -39,20 +37,63 @@ class SearchLinkNode(BaseNode):
         input: str,
         output: List[str],
         node_config: Optional[dict] = None,
-        node_name: str = "GenerateLinks",
+        node_name: str = "SearchLinks",
     ):
         super().__init__(node_name, "node", input, output, 1, node_config)
 
-        self.llm_model = node_config["llm_model"]
-        self.verbose = (
-            False if node_config is None else node_config.get("verbose", False)
+        if node_config.get("filter_links", False) or "filter_config" in node_config:
+            provided_filter_config = node_config.get("filter_config", {})
+            self.filter_config = {
+                **default_filters.filter_dict,
+                **provided_filter_config,
+            }
+            self.filter_links = True
+        else:
+            self.filter_config = None
+            self.filter_links = False
+
+        self.verbose = node_config.get("verbose", False)
+        self.seen_links = set()
+
+    def _is_same_domain(self, url, domain):
+        if not self.filter_links or not self.filter_config.get(
+            "diff_domain_filter", True
+        ):
+            return True
+        parsed_url = urlparse(url)
+        parsed_domain = urlparse(domain)
+        return parsed_url.netloc == parsed_domain.netloc
+
+    def _is_image_url(self, url):
+        if not self.filter_links:
+            return False
+        image_extensions = self.filter_config.get("img_exts", [])
+        return any(url.lower().endswith(ext) for ext in image_extensions)
+
+    def _is_language_url(self, url):
+        if not self.filter_links:
+            return False
+
+        lang_indicators = self.filter_config.get("lang_indicators", [])
+        parsed_url = urlparse(url)
+        query_params = parse_qs(parsed_url.query)
+
+        return any(
+            indicator in parsed_url.path.lower() or indicator in query_params
+            for indicator in lang_indicators
         )
+
+    def _is_potentially_irrelevant(self, url):
+        if not self.filter_links:
+            return False
+
+        irrelevant_keywords = self.filter_config.get("irrelevant_keywords", [])
+        return any(keyword in url.lower() for keyword in irrelevant_keywords)
 
     def execute(self, state: dict) -> dict:
         """
-        Filter out relevant links from the webpage that are relavant to prompt. Out of the filtered links, also
-        ensure that all links are navigable.
-
+        Filter out relevant links from the webpage that are relavant to prompt.
+        Out of the filtered links, also ensure that all links are navigable.
         Args:
             state (dict): The current state of the graph. The input keys will be used to fetch the
                             correct data types from the state.
@@ -67,39 +108,10 @@ class SearchLinkNode(BaseNode):
 
         self.logger.info(f"--- Executing {self.node_name} Node ---")
 
-        # Interpret input keys based on the provided input expression
-        input_keys = self.get_input_keys(state)
-
-        user_prompt = state[input_keys[0]]
-        parsed_content_chunks = state[input_keys[1]]
+        parsed_content_chunks = state.get("doc")
+        source_url = state.get("url") or state.get("local_dir")
         output_parser = JsonOutputParser()
 
-        prompt_relevant_links = """
-            You are a website scraper and you have just scraped the following content from a website.
-            Content: {content}
-            
-            You are now tasked with identifying all hyper links within the content that are potentially
-            relevant to the user task: {user_prompt}
-            
-            Assume relevance broadly, including any links that might be related or potentially useful 
-            in relation to the task.
-
-            Sort it in order of importance, the first one should be the most important one, the last one
-            the least important
-            
-            Please list only valid URLs and make sure to err on the side of inclusion if it's uncertain 
-            whether the content at the link is directly relevant.
-
-            Output only a list of relevant links in the format:
-            [
-                "link1",
-                "link2",
-                "link3",
-                .
-                .
-                .
-            ]
-            """
         relevant_links = []
 
         for i, chunk in enumerate(
@@ -109,15 +121,38 @@ class SearchLinkNode(BaseNode):
                 disable=not self.verbose,
             )
         ):
-            merge_prompt = PromptTemplate(
-                template=prompt_relevant_links,
-                input_variables=["content", "user_prompt"],
-            )
-            merge_chain = merge_prompt | self.llm_model | output_parser
-            # merge_chain = merge_prompt | self.llm_model
-            answer = merge_chain.invoke(
-                {"content": chunk.page_content, "user_prompt": user_prompt}
-            )
-            relevant_links += answer
+            try:
+                links = re.findall(r'https?://[^\s"<>\]]+', str(chunk.page_content))
+
+                if not self.filter_links:
+                    links = list(set(links))
+
+                    relevant_links += links
+                    self.seen_links.update(relevant_links)
+                else:
+                    filtered_links = [
+                        link
+                        for link in links
+                        if self._is_same_domain(link, source_url)
+                        and not self._is_image_url(link)
+                        and not self._is_language_url(link)
+                        and not self._is_potentially_irrelevant(link)
+                        and link not in self.seen_links
+                    ]
+                    filtered_links = list(set(filtered_links))
+                    relevant_links += filtered_links
+                    self.seen_links.update(relevant_links)
+
+            except Exception as e:
+                self.logger.error(f"Error extracting links: {e}. Falling back to LLM.")
+
+                merge_prompt = PromptTemplate(
+                    template=TEMPLATE_RELEVANT_LINKS,
+                    input_variables=["content", "user_prompt"],
+                )
+                merge_chain = merge_prompt | self.llm_model | output_parser
+                answer = merge_chain.invoke({"content": chunk.page_content})
+                relevant_links += answer
+
         state.update({self.output[0]: relevant_links})
         return state

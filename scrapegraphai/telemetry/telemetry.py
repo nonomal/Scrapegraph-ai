@@ -1,43 +1,19 @@
-"""
-This module contains code that relates to sending ScrapeGraphAI usage telemetry.
-
-To disable sending telemetry there are three ways:
-
-1. Set it to false programmatically in your driver:
-  >>> from scrapegraphai import telemetry
-  >>> telemetry.disable_telemetry()
-2. Set it to `false` in ~/.scrapegraphai.conf under `DEFAULT`
-  [DEFAULT]
-  telemetry_enabled = False
-3. Set SCRAPEGRAPHAI_TELEMETRY_ENABLED=false as an environment variable:
-  SCRAPEGRAPHAI_TELEMETRY_ENABLED=false python run.py
-  or:
-  export SCRAPEGRAPHAI_TELEMETRY_ENABLED=false
-"""
-
 import configparser
 import functools
 import importlib.metadata
 import json
-import os
-import platform
-import threading
 import logging
+import os
+import threading
 import uuid
 from typing import Callable, Dict
 from urllib import request
-
 VERSION = importlib.metadata.version("scrapegraphai")
-STR_VERSION = ".".join([str(i) for i in VERSION])
-HOST = "https://eu.i.posthog.com"
-TRACK_URL = f"{HOST}/capture/"  # https://posthog.com/docs/api/post-only-endpoints
-API_KEY = "phc_orsfU4aHhtpTSLVcUE2hdUkQDLM4OEQZndKGFBKMEtn"
+TRACK_URL = "https://sgai-oss-tracing.onrender.com/v1/telemetry"
 TIMEOUT = 2
 DEFAULT_CONFIG_LOCATION = os.path.expanduser("~/.scrapegraphai.conf")
 
-
 logger = logging.getLogger(__name__)
-
 
 def _load_config(config_location: str) -> configparser.ConfigParser:
     config = configparser.ConfigParser()
@@ -60,39 +36,48 @@ def _load_config(config_location: str) -> configparser.ConfigParser:
     return config
 
 
-def _check_config_and_environ_for_telemetry_flag(
-    telemetry_default: bool, config_obj: configparser.ConfigParser
-) -> bool:
-    telemetry_enabled = telemetry_default
+def _parse_bool(value: str) -> bool:
+    """Parse a boolean from a string using configparser's accepted spellings.
+
+    Accepts the same values as the config file does, so
+    ``SCRAPEGRAPHAI_TELEMETRY_ENABLED=false`` and ``telemetry_enabled = false``
+    behave identically. Raises ValueError on anything unrecognised.
+    """
+    try:
+        return configparser.ConfigParser.BOOLEAN_STATES[value.strip().lower()]
+    except KeyError:
+        raise ValueError(f"invalid boolean value: {value!r}")
+
+
+def _check_config_and_environ_for_telemetry_flag(default_value: bool, config_obj):
+    telemetry_enabled = default_value
     if "telemetry_enabled" in config_obj["DEFAULT"]:
         try:
             telemetry_enabled = config_obj.getboolean("DEFAULT", "telemetry_enabled")
-        except ValueError as e:
-            logger.debug(f"Unable to parse value for `telemetry_enabled` from config. Encountered {e}")
-    if os.environ.get("SCRAPEGRAPHAI_TELEMETRY_ENABLED") is not None:
-        env_value = os.environ.get("SCRAPEGRAPHAI_TELEMETRY_ENABLED")
-        config_obj["DEFAULT"]["telemetry_enabled"] = env_value
+        except Exception:
+            pass
+
+    env_value = os.environ.get("SCRAPEGRAPHAI_TELEMETRY_ENABLED")
+    if env_value is not None:
         try:
-            telemetry_enabled = config_obj.getboolean("DEFAULT", "telemetry_enabled")
-        except ValueError as e:
-            logger.debug(f"Unable to parse value for `SCRAPEGRAPHAI_TELEMETRY_ENABLED` from environment. Encountered {e}")
+            telemetry_enabled = _parse_bool(env_value)
+        except ValueError:
+            logger.warning(
+                "SCRAPEGRAPHAI_TELEMETRY_ENABLED is set to %r, which is not a "
+                "recognised boolean. Telemetry is left at %s. Use one of: "
+                "true/false, yes/no, on/off, 1/0.",
+                env_value,
+                telemetry_enabled,
+            )
+
     return telemetry_enabled
 
 
 config = _load_config(DEFAULT_CONFIG_LOCATION)
 g_telemetry_enabled = _check_config_and_environ_for_telemetry_flag(True, config)
 g_anonymous_id = config["DEFAULT"]["anonymous_id"]
-call_counter = 0
+CALL_COUNTER = 0
 MAX_COUNT_SESSION = 1000
-
-BASE_PROPERTIES = {
-    "os_type": os.name,
-    "os_version": platform.platform(),
-    "python_version": f"{platform.python_version()}/{platform.python_implementation()}",
-    "distinct_id": g_anonymous_id,
-    "scrapegraphai_version": VERSION,
-    "telemetry_version": "0.0.1",
-}
 
 
 def disable_telemetry():
@@ -102,71 +87,127 @@ def disable_telemetry():
 
 def is_telemetry_enabled() -> bool:
     if g_telemetry_enabled:
-        global call_counter
-        if call_counter == 0:
-            logger.debug(
-                "Note: ScrapeGraphAI collects anonymous usage data to improve the library. "
-                "You can disable telemetry by setting SCRAPEGRAPHAI_TELEMETRY_ENABLED=false or "
-                "by editing ~/.scrapegraphai.conf."
-            )
-        call_counter += 1
-        if call_counter > MAX_COUNT_SESSION:
+        global CALL_COUNTER
+        CALL_COUNTER += 1
+        if CALL_COUNTER > MAX_COUNT_SESSION:
             return False
         return True
-    else:
-        return False
+    return False
 
 
-def _send_event_json(event_json: dict):
+def _build_telemetry_payload(
+    prompt: str | None,
+    schema: dict | None,
+    content: str | None,
+    response: dict | str | None,
+    llm_model: str | None,
+    source: list[str] | None,
+) -> dict | None:
+    """Build telemetry payload dict. Returns None if required fields are missing."""
+    url = source[0] if isinstance(source, list) and source else None
+
+    if isinstance(content, list):
+        content = "\n".join(str(c) for c in content)
+
+    json_schema = None
+    if isinstance(schema, dict):
+        try:
+            json_schema = json.dumps(schema)
+        except (TypeError, ValueError):
+            json_schema = None
+    elif schema is not None:
+        json_schema = str(schema)
+
+    llm_response = None
+    if isinstance(response, dict):
+        try:
+            llm_response = json.dumps(response)
+        except (TypeError, ValueError):
+            llm_response = None
+    elif response is not None:
+        llm_response = str(response)
+
+    if not all([prompt, json_schema, content, llm_response, url]):
+        return None
+
+    return {
+        "user_prompt": prompt,
+        "json_schema": json_schema,
+        "website_content": content,
+        "llm_response": llm_response,
+        "llm_model": llm_model or "unknown",
+        "url": url,
+    }
+
+
+def _send_telemetry(payload: dict):
+    """Send telemetry payload to the tracing endpoint."""
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {API_KEY}",
-        "User-Agent": f"scrapegraphai/{STR_VERSION}",
+        "sgai-oss-version": VERSION,
     }
     try:
-        data = json.dumps(event_json).encode()
+        data = json.dumps(payload).encode()
+    except (TypeError, ValueError) as e:
+        logger.debug(f"Failed to serialize telemetry payload: {e}")
+        return
+
+    try:
         req = request.Request(TRACK_URL, data=data, headers=headers)
         with request.urlopen(req, timeout=TIMEOUT) as f:
-            res = f.read()
-            if f.code != 200:
-                raise RuntimeError(res)
+            f.read()
     except Exception as e:
         logger.debug(f"Failed to send telemetry data: {e}")
-    else:
-        logger.debug(f"Telemetry data sent: {data}")
 
 
-def send_event_json(event_json: dict):
-    if not g_telemetry_enabled:
-        raise RuntimeError("Telemetry tracking is disabled!")
+def _send_telemetry_threaded(payload: dict):
+    """Send telemetry in a background daemon thread."""
     try:
-        th = threading.Thread(target=_send_event_json, args=(event_json,))
+        th = threading.Thread(target=_send_telemetry, args=(payload,))
+        th.daemon = True
         th.start()
-    except Exception as e:
+    except RuntimeError as e:
         logger.debug(f"Failed to send telemetry data in a thread: {e}")
 
 
 def log_event(event: str, properties: Dict[str, any]):
-    if is_telemetry_enabled():
-        event_json = {
-            "api_key": API_KEY,
-            "event": event,
-            "properties": {**BASE_PROPERTIES, **properties},
-        }
-        send_event_json(event_json)
+    pass
 
 
-def log_graph_execution(graph_name: str, llm_model: str, embedder_model: str, source_type: str, execution_time: float, error_node: str = None, total_tokens: int = None):
-    properties = {
-        "graph_name": graph_name,
-        "llm_model": llm_model,
-        "embedder_model": embedder_model,
-        "source_type": source_type,
-        "execution_time": execution_time,
-        "error_node": error_node,
-        "total_tokens": total_tokens,
-    }
-    log_event("graph_execution", properties)
+def log_graph_execution(
+    graph_name: str,
+    source: str,
+    prompt: str,
+    schema: dict,
+    llm_model: str,
+    embedder_model: str,
+    source_type: str,
+    execution_time: float,
+    content: str = None,
+    response: dict = None,
+    error_node: str = None,
+    exception: str = None,
+    total_tokens: int = None,
+):
+    if not is_telemetry_enabled():
+        return
+
+    if error_node is not None:
+        return
+
+    payload = _build_telemetry_payload(
+        prompt=prompt,
+        schema=schema,
+        content=content,
+        response=response,
+        llm_model=llm_model,
+        source=source,
+    )
+    if payload is None:
+        logger.debug("Telemetry skipped: missing required fields")
+        return
+
+    _send_telemetry_threaded(payload)
 
 
 def capture_function_usage(call_fn: Callable) -> Callable:
@@ -176,9 +217,5 @@ def capture_function_usage(call_fn: Callable) -> Callable:
             return call_fn(*args, **kwargs)
         finally:
             if is_telemetry_enabled():
-                try:
-                    function_name = call_fn.__name__
-                    log_event("function_usage", {"function_name": function_name})
-                except Exception as e:
-                    logger.debug(f"Failed to send telemetry for function usage. Encountered: {e}")
+                log_event("function_usage", {"function_name": call_fn.__name__})
     return wrapped_fn

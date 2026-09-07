@@ -4,10 +4,11 @@ SearchInternetNode Module
 
 from typing import List, Optional
 
-from langchain.output_parsers import CommaSeparatedListOutputParser
-from langchain.prompts import PromptTemplate
+from langchain_core.output_parsers import CommaSeparatedListOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_ollama import ChatOllama
 
-from ..utils.logging import get_logger
+from ..prompts import TEMPLATE_SEARCH_INTERNET
 from ..utils.research_web import search_on_web
 from .base_node import BaseNode
 
@@ -43,7 +44,17 @@ class SearchInternetNode(BaseNode):
         self.verbose = (
             False if node_config is None else node_config.get("verbose", False)
         )
-        self.search_engine = node_config.get("search_engine", "google")
+        self.proxy = node_config.get("loader_kwargs", {}).get("proxy", None)
+        self.search_engine = (
+            node_config["search_engine"]
+            if node_config.get("search_engine")
+            else "duckduckgo"
+        )
+
+        self.serper_api_key = (
+            node_config["serper_api_key"] if node_config.get("serper_api_key") else None
+        )
+
         self.max_results = node_config.get("max_results", 3)
 
     def execute(self, state: dict) -> dict:
@@ -69,42 +80,38 @@ class SearchInternetNode(BaseNode):
 
         input_keys = self.get_input_keys(state)
 
-        # Fetching data from the state based on the input keys
         input_data = [state[key] for key in input_keys]
 
         user_prompt = input_data[0]
 
         output_parser = CommaSeparatedListOutputParser()
 
-        search_template = """
-        PROMPT:
-        You are a search engine and you need to generate a search query based on the user's prompt. \n
-        Given the following user prompt, return a query that can be 
-        used to search the internet for relevant information. \n
-        You should return only the query string without any additional sentences. \n
-        For example, if the user prompt is "What is the capital of France?",
-        you should return "capital of France". \n
-        If you return something else, you will get a really bad grade. \n
-        USER PROMPT: {user_prompt}"""
-
         search_prompt = PromptTemplate(
-            template=search_template,
+            template=TEMPLATE_SEARCH_INTERNET,
             input_variables=["user_prompt"],
         )
 
-        # Execute the chain to get the search query
         search_answer = search_prompt | self.llm_model | output_parser
-        search_query = search_answer.invoke({"user_prompt": user_prompt})[0]
+
+        if isinstance(self.llm_model, ChatOllama) and self.llm_model.format == "json":
+            self.llm_model.format = None
+            search_query = search_answer.invoke({"user_prompt": user_prompt})[0]
+            self.llm_model.format = "json"
+        else:
+            search_query = search_answer.invoke({"user_prompt": user_prompt})[0]
 
         self.logger.info(f"Search Query: {search_query}")
 
-        answer = search_on_web(query=search_query, max_results=self.max_results,
-                               search_engine=self.search_engine)
+        answer = search_on_web(
+            query=search_query,
+            max_results=self.max_results,
+            search_engine=self.search_engine,
+            proxy=self.proxy,
+            serper_api_key=self.serper_api_key,
+        )
 
         if len(answer) == 0:
-            # raise an exception if no answer is found
             raise ValueError("Zero results found for the search query.")
 
-        # Update the state with the generated answer
         state.update({self.output[0]: answer})
         return state

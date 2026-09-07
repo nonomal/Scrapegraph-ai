@@ -2,10 +2,12 @@
 GetProbableTagsNode Module
 """
 
-from typing import List, Optional
-from langchain.output_parsers import CommaSeparatedListOutputParser
-from langchain.prompts import PromptTemplate
-from ..utils.logging import get_logger
+from typing import List
+
+from langchain_core.output_parsers import CommaSeparatedListOutputParser
+from langchain_core.prompts import PromptTemplate
+
+from ..prompts import TEMPLATE_GET_PROBABLE_TAGS
 from .base_node import BaseNode
 
 
@@ -60,10 +62,8 @@ class GetProbableTagsNode(BaseNode):
 
         self.logger.info(f"--- Executing {self.node_name} Node ---")
 
-        # Interpret input keys based on the provided input expression
         input_keys = self.get_input_keys(state)
 
-        # Fetching data from the state based on the input keys
         input_data = [state[key] for key in input_keys]
 
         user_prompt = input_data[0]
@@ -72,14 +72,7 @@ class GetProbableTagsNode(BaseNode):
         output_parser = CommaSeparatedListOutputParser()
         format_instructions = output_parser.get_format_instructions()
 
-        template = """
-        PROMPT:
-        You are a website scraper that knows all the types of html tags.
-        You are now asked to list all the html tags where you think you can find the information of the asked question.\n 
-        INSTRUCTIONS: {format_instructions} \n  
-        WEBPAGE: The webpage is: {webpage} \n 
-        QUESTION: The asked question is the following: {question}
-        """
+        template = TEMPLATE_GET_PROBABLE_TAGS
 
         tag_prompt = PromptTemplate(
             template=template,
@@ -90,10 +83,8 @@ class GetProbableTagsNode(BaseNode):
             },
         )
 
-        # Execute the chain to get probable tags
         tag_answer = tag_prompt | self.llm_model | output_parser
         probable_tags = tag_answer.invoke({"question": user_prompt})
 
-        # Update the dictionary with probable tags
         state.update({self.output[0]: probable_tags})
         return state

@@ -2,18 +2,19 @@
 MergeAnswersNode Module
 """
 
-# Imports from standard library
 from typing import List, Optional
-from tqdm import tqdm
 
-# Imports from Langchain
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
+from langchain_ollama import ChatOllama
 from langchain_core.output_parsers import JsonOutputParser
-from tqdm import tqdm
+from langchain_mistralai import ChatMistralAI
+from langchain_openai import ChatOpenAI
 
-from ..utils.logging import get_logger
-
-# Imports from the library
+from ..prompts import TEMPLATE_COMBINED
+from ..utils.output_parser import (
+    get_pydantic_output_parser,
+    get_structured_output_parser,
+)
 from .base_node import BaseNode
 
 
@@ -42,6 +43,13 @@ class MergeAnswersNode(BaseNode):
         super().__init__(node_name, "node", input, output, 2, node_config)
 
         self.llm_model = node_config["llm_model"]
+
+        if isinstance(self.llm_model, ChatOllama):
+            if self.node_config.get("schema", None) is None:
+                self.llm_model.format = "json"
+            else:
+                self.llm_model.format = self.node_config["schema"].model_json_schema()
+
         self.verbose = (
             False if node_config is None else node_config.get("verbose", False)
         )
@@ -65,40 +73,35 @@ class MergeAnswersNode(BaseNode):
 
         self.logger.info(f"--- Executing {self.node_name} Node ---")
 
-        # Interpret input keys based on the provided input expression
         input_keys = self.get_input_keys(state)
 
-        # Fetching data from the state based on the input keys
         input_data = [state[key] for key in input_keys]
 
         user_prompt = input_data[0]
         answers = input_data[1]
 
-        # merge the answers in one string
         answers_str = ""
         for i, answer in enumerate(answers):
-            answers_str += f"CONTENT WEBSITE {i+1}: {answer}\n"
+            answers_str += f"CONTENT WEBSITE {i + 1}: {answer}\n"
 
-        # Initialize the output parser
         if self.node_config.get("schema", None) is not None:
-            output_parser = JsonOutputParser(pydantic_object=self.node_config["schema"])
+            if isinstance(self.llm_model, (ChatOpenAI, ChatMistralAI)):
+                self.llm_model = self.llm_model.with_structured_output(
+                    schema=self.node_config["schema"]
+                )  # json schema works only on specific models
+
+                output_parser = get_structured_output_parser(self.node_config["schema"])
+                format_instructions = "NA"
+            else:
+                output_parser = get_pydantic_output_parser(self.node_config["schema"])
+                format_instructions = output_parser.get_format_instructions()
+
         else:
             output_parser = JsonOutputParser()
-
-        format_instructions = output_parser.get_format_instructions()
-
-        template_merge = """
-        You are a website scraper and you have just scraped some content from multiple websites.\n
-        You are now asked to provide an answer to a USER PROMPT based on the content you have scraped.\n
-        You need to merge the content from the different websites into a single answer without repetitions (if there are any). \n
-        The scraped contents are in a JSON format and you need to merge them based on the context and providing a correct JSON structure.\n
-        OUTPUT INSTRUCTIONS: {format_instructions}\n
-        USER PROMPT: {user_prompt}\n
-        WEBSITE CONTENT: {website_content}
-        """
+            format_instructions = output_parser.get_format_instructions()
 
         prompt_template = PromptTemplate(
-            template=template_merge,
+            template=TEMPLATE_COMBINED,
             input_variables=["user_prompt"],
             partial_variables={
                 "format_instructions": format_instructions,
@@ -109,6 +112,16 @@ class MergeAnswersNode(BaseNode):
         merge_chain = prompt_template | self.llm_model | output_parser
         answer = merge_chain.invoke({"user_prompt": user_prompt})
 
-        # Update the state with the generated answer
+        # Get the URLs from the state, ensuring we get the actual URLs used for scraping
+        urls = []
+        if "urls" in state:
+            urls = state["urls"]
+        elif "considered_urls" in state:
+            urls = state["considered_urls"]
+
+        # Only add sources if we actually have URLs
+        if urls:
+            answer["sources"] = urls
+
         state.update({self.output[0]: answer})
         return state

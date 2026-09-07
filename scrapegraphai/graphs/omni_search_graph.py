@@ -1,24 +1,21 @@
-""" 
+"""
 OmniSearchGraph Module
 """
 
-from copy import copy, deepcopy
-from typing import Optional
+from copy import deepcopy
+from typing import Optional, Type
+
 from pydantic import BaseModel
 
-from .base_graph import BaseGraph
+from ..nodes import GraphIteratorNode, MergeAnswersNode, SearchInternetNode
+from ..utils.copy import safe_deepcopy
 from .abstract_graph import AbstractGraph
+from .base_graph import BaseGraph
 from .omni_scraper_graph import OmniScraperGraph
-
-from ..nodes import (
-    SearchInternetNode,
-    GraphIteratorNode,
-    MergeAnswersNode
-)
 
 
 class OmniSearchGraph(AbstractGraph):
-    """ 
+    """
     OmniSearchGraph is a scraping pipeline that searches the internet for answers to a given prompt.
     It only requires a user prompt to search the internet and generate an answer.
 
@@ -39,19 +36,17 @@ class OmniSearchGraph(AbstractGraph):
     Example:
         >>> omni_search_graph = OmniSearchGraph(
         ...     "What is Chioggia famous for?",
-        ...     {"llm": {"model": "gpt-4o"}}
+        ...     {"llm": {"model": "openai/gpt-4o"}}
         ... )
         >>> result = search_graph.run()
     """
 
-    def __init__(self, prompt: str, config: dict, schema: Optional[BaseModel] = None):
-
+    def __init__(
+        self, prompt: str, config: dict, schema: Optional[Type[BaseModel]] = None
+    ):
         self.max_results = config.get("max_results", 3)
 
-        if all(isinstance(value, str) for value in config.values()):
-            self.copy_config = copy(config)
-        else:
-            self.copy_config = deepcopy(config)
+        self.copy_config = safe_deepcopy(config)
 
         self.copy_schema = deepcopy(schema)
 
@@ -65,58 +60,39 @@ class OmniSearchGraph(AbstractGraph):
             BaseGraph: A graph instance representing the web scraping and searching workflow.
         """
 
-        # ************************************************
-        # Create a OmniScraperGraph instance
-        # ************************************************
-
-        omni_scraper_instance = OmniScraperGraph(
-            prompt="",
-            source="",
-            config=self.copy_config,
-            schema=self.copy_schema
-        )
-
-        # ************************************************
-        # Define the graph nodes
-        # ************************************************
-
         search_internet_node = SearchInternetNode(
             input="user_prompt",
             output=["urls"],
             node_config={
                 "llm_model": self.llm_model,
-                "max_results": self.max_results
-            }
+                "max_results": self.max_results,
+                "search_engine": self.copy_config.get("search_engine"),
+            },
         )
         graph_iterator_node = GraphIteratorNode(
             input="user_prompt & urls",
             output=["results"],
             node_config={
-                "graph_instance": omni_scraper_instance,
-            }
+                "graph_instance": OmniScraperGraph,
+                "scraper_config": self.copy_config,
+            },
+            schema=self.copy_schema,
         )
 
         merge_answers_node = MergeAnswersNode(
             input="user_prompt & results",
             output=["answer"],
-            node_config={
-                "llm_model": self.llm_model,
-                "schema": self.schema
-            }
+            node_config={"llm_model": self.llm_model, "schema": self.copy_schema},
         )
 
         return BaseGraph(
-            nodes=[
-                search_internet_node,
-                graph_iterator_node,
-                merge_answers_node
-            ],
+            nodes=[search_internet_node, graph_iterator_node, merge_answers_node],
             edges=[
                 (search_internet_node, graph_iterator_node),
-                (graph_iterator_node, merge_answers_node)
+                (graph_iterator_node, merge_answers_node),
             ],
             entry_point=search_internet_node,
-            graph_name=self.__class__.__name__
+            graph_name=self.__class__.__name__,
         )
 
     def run(self) -> str:
@@ -126,6 +102,7 @@ class OmniSearchGraph(AbstractGraph):
         Returns:
             str: The answer to the prompt.
         """
+
         inputs = {"user_prompt": self.prompt}
         self.final_state, self.execution_info = self.graph.execute(inputs)
 

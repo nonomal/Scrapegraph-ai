@@ -1,8 +1,9 @@
 FROM python:3.11-slim
 
-RUN apt-get update && apt-get upgrade -y && \
-useradd -m -s /bin/bash app
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
-USER app
+RUN pip install --no-cache-dir scrapegraphai
+RUN pip install --no-cache-dir scrapegraphai[burr]
 
-RUN pip install scrapegraphai
+RUN python3 -m playwright install-deps
+RUN python3 -m playwright install

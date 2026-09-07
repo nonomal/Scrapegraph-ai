@@ -2,17 +2,13 @@
 JSONScraperGraph Module
 """
 
-from typing import Optional
+from typing import Optional, Type
+
 from pydantic import BaseModel
 
-from .base_graph import BaseGraph
+from ..nodes import FetchNode, GenerateAnswerNode
 from .abstract_graph import AbstractGraph
-
-from ..nodes import (
-    FetchNode,
-    RAGNode,
-    GenerateAnswerNode
-)
+from .base_graph import BaseGraph
 
 
 class JSONScraperGraph(AbstractGraph):
@@ -25,7 +21,7 @@ class JSONScraperGraph(AbstractGraph):
         config (dict): Configuration parameters for the graph.
         schema (BaseModel): The schema for the graph output.
         llm_model: An instance of a language model client, configured for generating answers.
-        embedder_model: An instance of an embedding model client, 
+        embedder_model: An instance of an embedding model client,
         configured for generating embeddings.
         verbose (bool): A flag indicating whether to show print statements during execution.
         headless (bool): A flag indicating whether to run the graph in headless mode.
@@ -40,12 +36,18 @@ class JSONScraperGraph(AbstractGraph):
         >>> json_scraper = JSONScraperGraph(
         ...     "List me all the attractions in Chioggia.",
         ...     "data/chioggia.json",
-        ...     {"llm": {"model": "gpt-3.5-turbo"}}
+        ...     {"llm": {"model": "openai/gpt-3.5-turbo"}}
         ... )
         >>> result = json_scraper.run()
     """
 
-    def __init__(self, prompt: str, source: str, config: dict, schema: Optional[BaseModel] = None):
+    def __init__(
+        self,
+        prompt: str,
+        source: str,
+        config: dict,
+        schema: Optional[Type[BaseModel]] = None,
+    ):
         super().__init__(prompt, config, source, schema)
 
         self.input_key = "json" if source.endswith("json") else "json_dir"
@@ -60,37 +62,27 @@ class JSONScraperGraph(AbstractGraph):
 
         fetch_node = FetchNode(
             input="json | json_dir",
-            output=["doc", "link_urls", "img_urls"],
+            output=["doc"],
         )
-        rag_node = RAGNode(
-            input="user_prompt & (parsed_doc | doc)",
-            output=["relevant_chunks"],
-            node_config={
-                "llm_model": self.llm_model,
-                "embedder_model": self.embedder_model
-            }
-        )
+
         generate_answer_node = GenerateAnswerNode(
             input="user_prompt & (relevant_chunks | parsed_doc | doc)",
             output=["answer"],
             node_config={
                 "llm_model": self.llm_model,
-                "schema": self.schema
-            }
+                "additional_info": self.config.get("additional_info"),
+                "schema": self.schema,
+            },
         )
 
         return BaseGraph(
             nodes=[
                 fetch_node,
-                rag_node,
                 generate_answer_node,
             ],
-            edges=[
-                (fetch_node, rag_node),
-                (rag_node, generate_answer_node)
-            ],
+            edges=[(fetch_node, generate_answer_node)],
             entry_point=fetch_node,
-            graph_name=self.__class__.__name__
+            graph_name=self.__class__.__name__,
         )
 
     def run(self) -> str:

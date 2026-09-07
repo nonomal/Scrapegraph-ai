@@ -2,34 +2,26 @@
 AbstractGraph Module
 """
 
-from abc import ABC, abstractmethod
-from typing import Optional, Union
+import asyncio
 import uuid
+import warnings
+from abc import ABC, abstractmethod
+from typing import Optional, Type
+
+from langchain.chat_models import init_chat_model
+from langchain_core.rate_limiters import InMemoryRateLimiter
 from pydantic import BaseModel
 
-from langchain_aws import BedrockEmbeddings
-from langchain_community.embeddings import HuggingFaceHubEmbeddings, OllamaEmbeddings
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_google_genai.embeddings import GoogleGenerativeAIEmbeddings
-from langchain_openai import AzureOpenAIEmbeddings, OpenAIEmbeddings
-
 from ..helpers import models_tokens
-from ..models import (
-    Anthropic,
-    AzureOpenAI,
-    Bedrock,
-    Gemini,
-    Groq,
-    HuggingFace,
-    Ollama,
-    OpenAI,
-    OneApi
+from ..models import XAI, CLoD, DeepSeek, MiniMax, Nvidia, OneApi
+from ..utils.logging import get_logger, set_verbosity_info, set_verbosity_warning
+
+logger = get_logger(__name__)
+
+# ANSI escape sequence for hyperlink
+CLICKABLE_URL = (
+    "\033]8;;https://scrapegraphai.com\033\\https://scrapegraphai.com\033]8;;\033\\"
 )
-from ..models.ernie import Ernie
-from ..utils.logging import set_verbosity_debug, set_verbosity_warning, set_verbosity_info
-
-from ..helpers import models_tokens
-from ..models import AzureOpenAI, Bedrock, Gemini, Groq, HuggingFace, Ollama, OpenAI, Anthropic, DeepSeek
 
 
 class AbstractGraph(ABC):
@@ -41,8 +33,6 @@ class AbstractGraph(ABC):
         config (dict): Configuration parameters for the graph.
         schema (BaseModel): The schema for the graph output.
         llm_model: An instance of a language model client, configured for generating answers.
-        embedder_model: An instance of an embedding model client,
-                        configured for generating embeddings.
         verbose (bool): A flag indicating whether to show print statements during execution.
         headless (bool): A flag indicating whether to run the graph in headless mode.
 
@@ -58,34 +48,38 @@ class AbstractGraph(ABC):
         ...         # Implementation of graph creation here
         ...         return graph
         ...
-        >>> my_graph = MyGraph("Example Graph", 
+        >>> my_graph = MyGraph("Example Graph",
         {"llm": {"model": "gpt-3.5-turbo"}}, "example_source")
         >>> result = my_graph.run()
     """
 
-    def __init__(self, prompt: str, config: dict, 
-                 source: Optional[str] = None, schema: Optional[BaseModel] = None):
-
+    def __init__(
+        self,
+        prompt: str,
+        config: dict,
+        source: Optional[str] = None,
+        schema: Optional[Type[BaseModel]] = None,
+    ):
         self.prompt = prompt
         self.source = source
         self.config = config
         self.schema = schema
-        self.llm_model = self._create_llm(config["llm"], chat=True)
-        self.embedder_model = self._create_default_embedder(llm_config=config["llm"]                                                            ) if "embeddings" not in config else self._create_embedder(
-            config["embeddings"])
-        self.verbose = False if config is None else config.get(
-            "verbose", False)
-        self.headless = True if config is None else config.get(
-            "headless", True)
-        self.loader_kwargs = config.get("loader_kwargs", {})
-        self.cache_path = config.get("cache_path", False)
+        # Set to True when no token limit is known for the configured model and
+        # the 8192 fallback is used; see _create_llm.
+        self.model_tokens_defaulted = False
+        self.llm_model = self._create_llm(config["llm"])
+        self.verbose = False if config is None else config.get("verbose", False)
+        self.headless = True if self.config is None else config.get("headless", True)
+        self.loader_kwargs = self.config.get("loader_kwargs", {})
+        self.cache_path = self.config.get("cache_path", False)
+        self.browser_base = self.config.get("browser_base")
+        self.scrape_do = self.config.get("scrape_do")
+        self.storage_state = self.config.get("storage_state")
+        self.timeout = self.config.get("timeout", 480)
 
-        # Create the graph
         self.graph = self._create_graph()
         self.final_state = None
         self.execution_info = None
-
-        # Set common configuration parameters
 
         verbose = bool(config and config.get("verbose"))
 
@@ -99,18 +93,16 @@ class AbstractGraph(ABC):
             "verbose": self.verbose,
             "loader_kwargs": self.loader_kwargs,
             "llm_model": self.llm_model,
-            "embedder_model": self.embedder_model,
             "cache_path": self.cache_path,
-            }
-       
+            "timeout": self.timeout,
+        }
+
         self.set_common_params(common_params, overwrite=True)
 
-        # set burr config
         self.burr_kwargs = config.get("burr_kwargs", None)
         if self.burr_kwargs is not None:
             self.graph.use_burr = True
             if "app_instance_id" not in self.burr_kwargs:
-                # set a random uuid for the app_instance_id to avoid conflicts
                 self.burr_kwargs["app_instance_id"] = str(uuid.uuid4())
 
             self.graph.burr_config = self.burr_kwargs
@@ -125,8 +117,8 @@ class AbstractGraph(ABC):
 
         for node in self.graph.nodes:
             node.update_config(params, overwrite)
-    
-    def _create_llm(self, llm_config: dict, chat=False) -> object:
+
+    def _create_llm(self, llm_config: dict) -> object:
         """
         Create a large language model instance based on the configuration provided.
 
@@ -140,214 +132,163 @@ class AbstractGraph(ABC):
             KeyError: If the model is not supported.
         """
 
-        llm_defaults = {"temperature": 0, "streaming": False}
+        llm_defaults = {"streaming": False}
         llm_params = {**llm_defaults, **llm_config}
+        rate_limit_params = llm_params.pop("rate_limit", {})
 
-        # If model instance is passed directly instead of the model details
+        if rate_limit_params:
+            requests_per_second = rate_limit_params.get("requests_per_second")
+            max_retries = rate_limit_params.get("max_retries")
+            if requests_per_second is not None:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    llm_params["rate_limiter"] = InMemoryRateLimiter(
+                        requests_per_second=requests_per_second
+                    )
+            if max_retries is not None:
+                llm_params["max_retries"] = max_retries
+
         if "model_instance" in llm_params:
+            try:
+                self.model_token = llm_params["model_tokens"]
+            except KeyError as exc:
+                raise KeyError("model_tokens not specified") from exc
             return llm_params["model_instance"]
 
-        # Instantiate the language model based on the model name
-        if "gpt-" in llm_params["model"]:
-            try:
-                self.model_token = models_tokens["openai"][llm_params["model"]]
-            except KeyError as exc:
-                raise KeyError("Model not supported") from exc
-            return OpenAI(llm_params)
-        elif "oneapi" in llm_params["model"]:
-            # take the model after the last dash
-            llm_params["model"] = llm_params["model"].split("/")[-1]
-            try:
-                self.model_token = models_tokens["oneapi"][llm_params["model"]]
-            except KeyError as exc:
-                raise KeyError("Model Model not supported") from exc
-            return OneApi(llm_params)
-        elif "azure" in llm_params["model"]:
-            # take the model after the last dash
-            llm_params["model"] = llm_params["model"].split("/")[-1]
-            try:
-                self.model_token = models_tokens["azure"][llm_params["model"]]
-            except KeyError as exc:
-                raise KeyError("Model not supported") from exc
-            return AzureOpenAI(llm_params)
+        known_providers = {
+            "openai",
+            "azure_openai",
+            "google_genai",
+            "google_vertexai",
+            "ollama",
+            "oneapi",
+            "nvidia",
+            "groq",
+            "anthropic",
+            "bedrock",
+            "mistralai",
+            "hugging_face",
+            "deepseek",
+            "ernie",
+            "fireworks",
+            "clod",
+            "togetherai",
+            "xai",
+            "minimax",
+        }
 
-        elif "gemini" in llm_params["model"]:
-            try:
-                self.model_token = models_tokens["gemini"][llm_params["model"]]
-            except KeyError as exc:
-                raise KeyError("Model not supported") from exc
-            return Gemini(llm_params)
-        elif llm_params["model"].startswith("claude"):
-            try:
-                self.model_token = models_tokens["claude"][llm_params["model"]]
-            except KeyError as exc:
-                raise KeyError("Model not supported") from exc
-            return Anthropic(llm_params)
-        elif "ollama" in llm_params["model"]:
-            llm_params["model"] = llm_params["model"].split("ollama/")[-1]
+        if "/" in llm_params["model"]:
+            split_model_provider = llm_params["model"].split("/", 1)
+            llm_params["model_provider"] = split_model_provider[0]
+            llm_params["model"] = split_model_provider[1]
+        else:
+            possible_providers = [
+                provider
+                for provider, models_d in models_tokens.items()
+                if llm_params["model"] in models_d
+            ]
+            if len(possible_providers) <= 0:
+                raise ValueError(
+                    f"""Provider {llm_params["model_provider"]} is not supported.
+                                If possible, try to use a model instance instead."""
+                )
+            llm_params["model_provider"] = possible_providers[0]
+            logger.info(
+                "Found providers %s for model %s, using %s. "
+                "If it was not intended please specify the model provider in the graph configuration",
+                possible_providers,
+                llm_params["model"],
+                llm_params["model_provider"],
+            )
 
-            # allow user to set model_tokens in config
+        if llm_params["model_provider"] not in known_providers:
+            raise ValueError(
+                f"""Provider {llm_params["model_provider"]} is not supported.
+                             If possible, try to use a model instance instead."""
+            )
+
+        if llm_params.get("model_tokens", None) is None:
             try:
-                if "model_tokens" in llm_params:
-                    self.model_token = llm_params["model_tokens"]
-                elif llm_params["model"] in models_tokens["ollama"]:
+                self.model_token = models_tokens[llm_params["model_provider"]][
+                    llm_params["model"]
+                ]
+            except KeyError:
+                logger.warning(
+                    "Max input tokens for model %s/%s not found, "
+                    "please specify the model_tokens parameter in the llm section of the graph configuration. "
+                    "Using default token size: 8192",
+                    llm_params["model_provider"],
+                    llm_params["model"],
+                )
+                self.model_token = 8192
+                # A silent 8192 window truncates long pages and changes the
+                # answer without failing. The log line alone is not reachable
+                # from the returned object, so callers that batch runs (or
+                # capture stdout only) have no way to tell a real limit from
+                # the fallback. Record it so it can be asserted on.
+                self.model_tokens_defaulted = True
+        else:
+            self.model_token = llm_params["model_tokens"]
+
+        # Consumed by ScrapeGraphAI; must not be forwarded to the model client.
+        llm_params.pop("model_tokens", None)
+
+        try:
+            if llm_params["model_provider"] not in {
+                "oneapi",
+                "nvidia",
+                "ernie",
+                "deepseek",
+                "togetherai",
+                "clod",
+                "xai",
+                "minimax",
+            }:
+                if llm_params["model_provider"] == "bedrock":
+                    llm_params["model_kwargs"] = {
+                        "temperature": llm_params.pop("temperature")
+                    }
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    return init_chat_model(**llm_params)
+            else:
+                model_provider = llm_params.pop("model_provider")
+
+                if model_provider == "clod":
+                    return CLoD(**llm_params)
+
+                if model_provider == "deepseek":
+                    return DeepSeek(**llm_params)
+
+                if model_provider == "minimax":
+                    return MiniMax(**llm_params)
+
+                if model_provider == "ernie":
+                    from langchain_community.chat_models import ErnieBotChat
+
+                    return ErnieBotChat(**llm_params)
+
+                elif model_provider == "oneapi":
+                    return OneApi(**llm_params)
+
+                elif model_provider == "xai":
+                    return XAI(**llm_params)
+
+                elif model_provider == "togetherai":
                     try:
-                        self.model_token = models_tokens["ollama"][llm_params["model"]]
-                    except KeyError as exc:
-                        print("model not found, using default token size (8192)")
-                        self.model_token = 8192
-                else:
-                    self.model_token = 8192
-            except AttributeError:
-                self.model_token = 8192
+                        from langchain_together import ChatTogether
+                    except ImportError:
+                        raise ImportError(
+                            """The langchain_together module is not installed.
+                                          Please install it using `pip install langchain-together`."""
+                        )
+                    return ChatTogether(**llm_params)
 
-            return Ollama(llm_params)
-        elif "hugging_face" in llm_params["model"]:
-            try:
-                self.model_token = models_tokens["hugging_face"][llm_params["model"]]
-            except KeyError:
-                print("model not found, using default token size (8192)")
-                self.model_token = 8192
-            return HuggingFace(llm_params)
-        elif "groq" in llm_params["model"]:
-            llm_params["model"] = llm_params["model"].split("/")[-1]
+                elif model_provider == "nvidia":
+                    return Nvidia(**llm_params)
 
-            try:
-                self.model_token = models_tokens["groq"][llm_params["model"]]
-            except KeyError:
-                print("model not found, using default token size (8192)")
-                self.model_token = 8192
-            return Groq(llm_params)
-        elif "bedrock" in llm_params["model"]:
-            llm_params["model"] = llm_params["model"].split("/")[-1]
-            model_id = llm_params["model"]
-            client = llm_params.get("client", None)
-            try:
-                self.model_token = models_tokens["bedrock"][llm_params["model"]]
-            except KeyError:
-                print("model not found, using default token size (8192)")
-                self.model_token = 8192
-            return Bedrock(
-                {
-                    "client": client,
-                    "model_id": model_id,
-                    "model_kwargs": {
-                        "temperature": llm_params["temperature"],
-                    },
-                }
-            )
-        elif "claude-3-" in llm_params["model"]:
-            try:
-                self.model_token = models_tokens["claude"]["claude3"]
-            except KeyError:
-                print("model not found, using default token size (8192)")
-                self.model_token = 8192
-            return Anthropic(llm_params)
-        elif "deepseek" in llm_params["model"]:
-            try:
-                self.model_token = models_tokens["deepseek"][llm_params["model"]]
-            except KeyError:
-                print("model not found, using default token size (8192)")
-                self.model_token = 8192
-            return DeepSeek(llm_params)
-        elif "ernie" in llm_params["model"]:
-            try:
-                self.model_token = models_tokens["ernie"][llm_params["model"]]
-            except KeyError:
-                print("model not found, using default token size (8192)")
-                self.model_token = 8192
-            return Ernie(llm_params)
-        else:
-            raise ValueError("Model provided by the configuration not supported")
-
-    def _create_default_embedder(self, llm_config=None) -> object:
-        """
-        Create an embedding model instance based on the chosen llm model.
-
-        Returns:
-            object: An instance of the embedding model client.
-
-        Raises:
-            ValueError: If the model is not supported.
-        """
-        if isinstance(self.llm_model, Gemini):
-            return GoogleGenerativeAIEmbeddings(
-                google_api_key=llm_config["api_key"], model="models/embedding-001"
-            )
-        if isinstance(self.llm_model, OpenAI):
-            return OpenAIEmbeddings(api_key=self.llm_model.openai_api_key, base_url=self.llm_model.openai_api_base)
-        elif isinstance(self.llm_model, DeepSeek):
-            return OpenAIEmbeddings(api_key=self.llm_model.openai_api_key)   
-
-        elif isinstance(self.llm_model, AzureOpenAIEmbeddings):
-            return self.llm_model
-        elif isinstance(self.llm_model, AzureOpenAI):
-            return AzureOpenAIEmbeddings()
-        elif isinstance(self.llm_model, Ollama):
-            # unwrap the kwargs from the model whihc is a dict
-            params = self.llm_model._lc_kwargs
-            # remove streaming and temperature
-            params.pop("streaming", None)
-            params.pop("temperature", None)
-
-            return OllamaEmbeddings(**params)
-        elif isinstance(self.llm_model, HuggingFace):
-            return HuggingFaceHubEmbeddings(model=self.llm_model.model)
-        elif isinstance(self.llm_model, Bedrock):
-            return BedrockEmbeddings(client=None, model_id=self.llm_model.model_id)
-        else:
-            raise ValueError("Embedding Model missing or not supported")
-
-    def _create_embedder(self, embedder_config: dict) -> object:
-        """
-        Create an embedding model instance based on the configuration provided.
-
-        Args:
-            embedder_config (dict): Configuration parameters for the embedding model.
-
-        Returns:
-            object: An instance of the embedding model client.
-
-        Raises:
-            KeyError: If the model is not supported.
-        """
-        embedder_params = {**embedder_config}
-        if "model_instance" in embedder_config:
-            return embedder_params["model_instance"]
-        # Instantiate the embedding model based on the model name
-        if "openai" in embedder_params["model"]:
-            return OpenAIEmbeddings(api_key=embedder_params["api_key"])
-        elif "azure" in embedder_params["model"]:
-            return AzureOpenAIEmbeddings()
-        elif "ollama" in embedder_params["model"]:
-            embedder_params["model"] = "/".join(embedder_params["model"].split("/")[1:])
-            try:
-                models_tokens["ollama"][embedder_params["model"]]
-            except KeyError as exc:
-                raise KeyError("Model not supported") from exc
-            return OllamaEmbeddings(**embedder_params)
-        elif "hugging_face" in embedder_params["model"]:
-            try:
-                models_tokens["hugging_face"][embedder_params["model"]]
-            except KeyError as exc:
-                raise KeyError("Model not supported") from exc
-            return HuggingFaceHubEmbeddings(model=embedder_params["model"])
-        elif "gemini" in embedder_params["model"]:
-            try:
-                models_tokens["gemini"][embedder_params["model"]]
-            except KeyError as exc:
-                raise KeyError("Model not supported") from exc
-            return GoogleGenerativeAIEmbeddings(model=embedder_params["model"])
-        elif "bedrock" in embedder_params["model"]:
-            embedder_params["model"] = embedder_params["model"].split("/")[-1]
-            client = embedder_params.get("client", None)
-            try:
-                models_tokens["bedrock"][embedder_params["model"]]
-            except KeyError as exc:
-                raise KeyError("Model not supported") from exc
-            return BedrockEmbeddings(client=client, model_id=embedder_params["model"])
-        else:
-            raise ValueError("Model provided by the configuration not supported")
+        except Exception as e:
+            raise Exception(f"Error instancing model: {e}")
 
     def get_state(self, key=None) -> dict:
         """ ""
@@ -389,11 +330,24 @@ class AbstractGraph(ABC):
         """
         Abstract method to create a graph representation.
         """
-        pass
 
     @abstractmethod
     def run(self) -> str:
         """
         Abstract method to execute the graph and return the result.
         """
-        pass
+        inputs = {"user_prompt": self.prompt, self.input_key: self.source}
+        self.final_state, self.execution_info = self.graph.execute(inputs)
+        result = self.final_state.get("answer", "No answer found.")
+        return result
+
+    async def run_safe_async(self) -> str:
+        """
+        Executes the run process asynchronously safety.
+
+        Returns:
+            str: The answer to the prompt.
+        """
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.run)

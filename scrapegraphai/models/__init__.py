@@ -1,16 +1,15 @@
 """
-    __init__.py file for models folder
+This module contains the model definitions used in the ScrapeGraphAI application.
 """
 
-from .openai import OpenAI
-from .azure_openai import AzureOpenAI
+from .atlascloud import AtlasCloud
+from .clod import CLoD
+from .deepseek import DeepSeek
+from .minimax import MiniMax
+from .nvidia import Nvidia
+from .oneapi import OneApi
 from .openai_itt import OpenAIImageToText
 from .openai_tts import OpenAITextToSpeech
-from .gemini import Gemini
-from .ollama import Ollama
-from .hugging_face import HuggingFace
-from .groq import Groq
-from .bedrock import Bedrock
-from .anthropic import Anthropic
-from .deepseek import DeepSeek
-from .oneapi import OneApi
+from .xai import XAI
+
+__all__ = ["AtlasCloud", "DeepSeek", "MiniMax", "OneApi", "OpenAIImageToText", "OpenAITextToSpeech", "CLoD", "XAI", "Nvidia"]

@@ -1,18 +1,20 @@
-"""high-level module for dynamic importing of python modules at runtime
+"""
+high-level module for dynamic importing of python modules at runtime
 
 source code inspired by https://gist.github.com/DiTo97/46f4b733396b8d7a8f1d4d22db902cfc
 """
 
+import importlib.util
 import sys
 import typing
-
 
 if typing.TYPE_CHECKING:
     import types
 
 
 def srcfile_import(modpath: str, modname: str) -> "types.ModuleType":
-    """imports a python module from its srcfile
+    """
+    imports a python module from its srcfile
 
     Args:
         modpath: The srcfile absolute path
@@ -24,9 +26,6 @@ def srcfile_import(modpath: str, modname: str) -> "types.ModuleType":
     Raises:
         ImportError: If the module cannot be imported from the srcfile
     """
-    import importlib.util  # noqa: F401
-
-    #
     spec = importlib.util.spec_from_file_location(modname, modpath)
 
     if spec is None:
@@ -39,7 +38,6 @@ def srcfile_import(modpath: str, modname: str) -> "types.ModuleType":
 
     module = importlib.util.module_from_spec(spec)
 
-    # adds the module to the global scope
     sys.modules[modname] = module
 
     spec.loader.exec_module(module)
@@ -48,7 +46,8 @@ def srcfile_import(modpath: str, modname: str) -> "types.ModuleType":
 
 
 def dynamic_import(modname: str, message: str = "") -> None:
-    """imports a python module at runtime
+    """
+    imports a python module at runtime
 
     Args:
         modname: The module name in the scope
@@ -59,7 +58,7 @@ def dynamic_import(modname: str, message: str = "") -> None:
     """
     if modname not in sys.modules:
         try:
-            import importlib  # noqa: F401
+            import importlib
 
             module = importlib.import_module(modname)
             sys.modules[modname] = module

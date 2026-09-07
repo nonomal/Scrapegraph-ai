@@ -3,15 +3,14 @@ GraphIterator Module
 """
 
 import asyncio
-import copy
-from typing import List, Optional
+from typing import List, Optional, Type
 
+from pydantic import BaseModel
 from tqdm.asyncio import tqdm
 
-from ..utils.logging import get_logger
 from .base_node import BaseNode
 
-_default_batchsize = 16
+DEFAULT_BATCHSIZE = 16
 
 
 class GraphIteratorNode(BaseNode):
@@ -35,12 +34,14 @@ class GraphIteratorNode(BaseNode):
         output: List[str],
         node_config: Optional[dict] = None,
         node_name: str = "GraphIterator",
+        schema: Optional[Type[BaseModel]] = None,
     ):
         super().__init__(node_name, "node", input, output, 2, node_config)
 
         self.verbose = (
             False if node_config is None else node_config.get("verbose", False)
         )
+        self.schema = schema
 
     def execute(self, state: dict) -> dict:
         """
@@ -51,13 +52,15 @@ class GraphIteratorNode(BaseNode):
                             the correct data from the state.
 
         Returns:
-            dict: The updated state with the output key containing the results of the graph instances.
+            dict: The updated state with the output key c
+            ontaining the results of the graph instances.
 
         Raises:
-            KeyError: If the input keys are not found in the state, indicating that the
-                        necessary information for running the graph instances is missing.
+            KeyError: If the input keys are not found in the state,
+            indicating that thenecessary information for running
+            the graph instances is missing.
         """
-        batchsize = self.node_config.get("batchsize", _default_batchsize)
+        batchsize = self.node_config.get("batchsize", DEFAULT_BATCHSIZE)
 
         self.logger.info(
             f"--- Executing {self.node_name} Node with batchsize {batchsize} ---"
@@ -91,43 +94,47 @@ class GraphIteratorNode(BaseNode):
             KeyError: If the input keys are not found in the state.
         """
 
-        # interprets input keys based on the provided input expression
         input_keys = self.get_input_keys(state)
 
-        # fetches data from the state based on the input keys
         input_data = [state[key] for key in input_keys]
 
         user_prompt = input_data[0]
         urls = input_data[1]
 
         graph_instance = self.node_config.get("graph_instance", None)
+        scraper_config = self.node_config.get("scraper_config", None)
 
         if graph_instance is None:
             raise ValueError("graph instance is required for concurrent execution")
 
-        # Assign depth level to the graph
-        if "graph_depth" in graph_instance.config:
-            graph_instance.config["graph_depth"] += 1
-        else:
-            graph_instance.config["graph_depth"] = 1
+        graph_instance = [
+            graph_instance(
+                prompt="", source="", config=scraper_config, schema=self.schema
+            )
+            for _ in range(len(urls))
+        ]
 
-        graph_instance.prompt = user_prompt
+        for graph in graph_instance:
+            if "graph_depth" in graph.config:
+                graph.config["graph_depth"] += 1
+            else:
+                graph.config["graph_depth"] = 1
+
+            graph.prompt = user_prompt
 
         participants = []
 
-        # semaphore to limit the number of concurrent tasks
         semaphore = asyncio.Semaphore(batchsize)
 
         async def _async_run(graph):
             async with semaphore:
                 return await asyncio.to_thread(graph.run)
 
-        # creates a deepcopy of the graph instance for each endpoint
-        for url in urls:
-            instance = copy.copy(graph_instance)
-            instance.source = url
-
-            participants.append(instance)
+        for url, graph in zip(urls, graph_instance):
+            graph.source = url
+            if url.startswith("http"):
+                graph.input_key = "url"
+            participants.append(graph)
 
         futures = [_async_run(graph) for graph in participants]
 

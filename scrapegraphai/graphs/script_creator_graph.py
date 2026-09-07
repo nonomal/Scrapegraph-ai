@@ -2,17 +2,13 @@
 ScriptCreatorGraph Module
 """
 
-from typing import Optional
+from typing import Optional, Type
+
 from pydantic import BaseModel
 
-from .base_graph import BaseGraph
+from ..nodes import FetchNode, GenerateScraperNode, ParseNode
 from .abstract_graph import AbstractGraph
-
-from ..nodes import (
-    FetchNode,
-    ParseNode,
-    GenerateScraperNode
-)
+from .base_graph import BaseGraph
 
 
 class ScriptCreatorGraph(AbstractGraph):
@@ -25,7 +21,7 @@ class ScriptCreatorGraph(AbstractGraph):
         config (dict): Configuration parameters for the graph.
         schema (BaseModel): The schema for the graph output.
         llm_model: An instance of a language model client, configured for generating answers.
-        embedder_model: An instance of an embedding model client, 
+        embedder_model: An instance of an embedding model client,
         configured for generating embeddings.
         verbose (bool): A flag indicating whether to show print statements during execution.
         headless (bool): A flag indicating whether to run the graph in headless mode.
@@ -42,14 +38,19 @@ class ScriptCreatorGraph(AbstractGraph):
         >>> script_creator = ScriptCreatorGraph(
         ...     "List me all the attractions in Chioggia.",
         ...     "https://en.wikipedia.org/wiki/Chioggia",
-        ...     {"llm": {"model": "gpt-3.5-turbo"}}
+        ...     {"llm": {"model": "openai/gpt-3.5-turbo"}}
         ... )
         >>> result = script_creator.run()
     """
 
-    def __init__(self, prompt: str, source: str, config: dict, schema: Optional[BaseModel] = None):
-
-        self.library = config['library']
+    def __init__(
+        self,
+        prompt: str,
+        source: str,
+        config: dict,
+        schema: Optional[Type[BaseModel]] = None,
+    ):
+        self.library = config["library"]
 
         super().__init__(prompt, config, source, schema)
 
@@ -65,24 +66,36 @@ class ScriptCreatorGraph(AbstractGraph):
 
         fetch_node = FetchNode(
             input="url | local_dir",
-            output=["doc", "link_urls", "img_urls"],
+            output=["doc"],
+            node_config={
+                "llm_model": self.llm_model,
+                "loader_kwargs": self.config.get("loader_kwargs", {}),
+                "script_creator": True,
+                "storage_state": self.config.get("storage_state"),
+            },
         )
+
         parse_node = ParseNode(
             input="doc",
             output=["parsed_doc"],
-            node_config={"chunk_size": self.model_token,
-                         "parse_html": False
-                         }
-        )
-        generate_scraper_node = GenerateScraperNode(
-            input="user_prompt & (doc)",
-            output=["answer"],
             node_config={
+                "chunk_size": self.model_token,
+                "parse_html": False,
                 "llm_model": self.llm_model,
                 "schema": self.schema,
             },
+        )
+
+        generate_scraper_node = GenerateScraperNode(
+            input="user_prompt & (parsed_doc)",
+            output=["answer"],
+            node_config={
+                "llm_model": self.llm_model,
+                "additional_info": self.config.get("additional_info"),
+                "schema": self.schema,
+            },
             library=self.library,
-            website=self.source
+            website=self.source,
         )
 
         return BaseGraph(
@@ -96,7 +109,7 @@ class ScriptCreatorGraph(AbstractGraph):
                 (parse_node, generate_scraper_node),
             ],
             entry_point=fetch_node,
-            graph_name=self.__class__.__name__
+            graph_name=self.__class__.__name__,
         )
 
     def run(self) -> str:

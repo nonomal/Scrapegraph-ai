@@ -1,25 +1,26 @@
-""" 
+"""
 SmartScraperMultiGraph Module
 """
 
-from copy import copy, deepcopy
-from typing import List, Optional
+from copy import deepcopy
+from typing import List, Optional, Type
+
 from pydantic import BaseModel
 
-from .base_graph import BaseGraph
+from ..nodes import GraphIteratorNode, MergeAnswersNode
+from ..utils.copy import safe_deepcopy
 from .abstract_graph import AbstractGraph
+from .base_graph import BaseGraph
 from .smart_scraper_graph import SmartScraperGraph
-
-from ..nodes import (
-    GraphIteratorNode,
-    MergeAnswersNode
-)
 
 
 class SmartScraperMultiGraph(AbstractGraph):
-    """ 
-    SmartScraperMultiGraph is a scraping pipeline that scrapes a list of URLs and generates answers to a given prompt.
+    """
+    SmartScraperMultiGraph is a scraping pipeline that scrapes a
+    list of URLs and generates answers to a given prompt.
     It only requires a user prompt and a list of URLs.
+    The difference with the SmartScraperMultiLiteGraph is that in this case the content will be abstracted
+    by llm and then merged finally passed to the llm.
 
     Attributes:
         prompt (str): The user prompt to search the internet.
@@ -36,22 +37,26 @@ class SmartScraperMultiGraph(AbstractGraph):
         schema (Optional[BaseModel]): The schema for the graph output.
 
     Example:
-        >>> search_graph = MultipleSearchGraph(
-        ...     "What is Chioggia famous for?",
-        ...     {"llm": {"model": "gpt-3.5-turbo"}}
+        >>> smart_scraper_multi_graph = SmartScraperMultiGraph(
+        ...     prompt="Who is ?",
+        ...     source= [
+        ...         "https://perinim.github.io/",
+        ...         "https://perinim.github.io/cv/"
+        ...     ],
+        ...     config={"llm": {"model": "openai/gpt-3.5-turbo"}}
         ... )
-        >>> result = search_graph.run()
+        >>> result = smart_scraper_multi_graph.run()
     """
 
-    def __init__(self, prompt: str, source: List[str], config: dict, schema: Optional[BaseModel] = None):
-
+    def __init__(
+        self,
+        prompt: str,
+        source: List[str],
+        config: dict,
+        schema: Optional[Type[BaseModel]] = None,
+    ):
         self.max_results = config.get("max_results", 3)
-
-        if all(isinstance(value, str) for value in config.values()):
-            self.copy_config = copy(config)
-        else:
-            self.copy_config = deepcopy(config)
-        
+        self.copy_config = safe_deepcopy(config)
         self.copy_schema = deepcopy(schema)
 
         super().__init__(prompt, config, source, schema)
@@ -64,36 +69,20 @@ class SmartScraperMultiGraph(AbstractGraph):
             BaseGraph: A graph instance representing the web scraping and searching workflow.
         """
 
-        # ************************************************
-        # Create a SmartScraperGraph instance
-        # ************************************************
-
-        smart_scraper_instance = SmartScraperGraph(
-            prompt="",
-            source="",
-            config=self.copy_config,
-            schema=self.copy_schema
-        )
-
-        # ************************************************
-        # Define the graph nodes
-        # ************************************************
-
         graph_iterator_node = GraphIteratorNode(
             input="user_prompt & urls",
             output=["results"],
             node_config={
-                "graph_instance": smart_scraper_instance,
-            }
+                "graph_instance": SmartScraperGraph,
+                "scraper_config": self.copy_config,
+            },
+            schema=self.copy_schema,
         )
 
         merge_answers_node = MergeAnswersNode(
             input="user_prompt & results",
             output=["answer"],
-            node_config={
-                "llm_model": self.llm_model,
-                "schema": self.schema
-            }
+            node_config={"llm_model": self.llm_model, "schema": self.copy_schema},
         )
 
         return BaseGraph(
@@ -105,7 +94,7 @@ class SmartScraperMultiGraph(AbstractGraph):
                 (graph_iterator_node, merge_answers_node),
             ],
             entry_point=graph_iterator_node,
-            graph_name=self.__class__.__name__
+            graph_name=self.__class__.__name__,
         )
 
     def run(self) -> str:
@@ -115,6 +104,7 @@ class SmartScraperMultiGraph(AbstractGraph):
         Returns:
             str: The answer to the prompt.
         """
+
         inputs = {"user_prompt": self.prompt, "urls": self.source}
         self.final_state, self.execution_info = self.graph.execute(inputs)
 

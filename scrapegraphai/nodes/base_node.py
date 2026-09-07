@@ -1,5 +1,5 @@
-""" 
-BaseNode Module
+"""
+This module defines the base node class for the ScrapeGraphAI application.
 """
 
 import re
@@ -11,7 +11,8 @@ from ..utils import get_logger
 
 class BaseNode(ABC):
     """
-    An abstract base class for nodes in a graph-based workflow, designed to perform specific actions when executed.
+    An abstract base class for nodes in a graph-based workflow,
+    designed to perform specific actions when executed.
 
     Attributes:
         node_name (str): The unique identifier name for the node.
@@ -27,7 +28,8 @@ class BaseNode(ABC):
         input (str): Expression defining the input keys needed from the state.
         output (List[str]): List of output keys to be updated in the state.
         min_input_len (int, optional): Minimum required number of input keys; defaults to 1.
-        node_config (Optional[dict], optional): Additional configuration for the node; defaults to None.
+        node_config (Optional[dict], optional): Additional configuration
+                                                for the node; defaults to None.
 
     Raises:
         ValueError: If `node_type` is not one of the allowed types.
@@ -52,7 +54,6 @@ class BaseNode(ABC):
         min_input_len: int = 1,
         node_config: Optional[dict] = None,
     ):
-
         self.node_name = node_name
         self.input = input
         self.output = output
@@ -86,9 +87,9 @@ class BaseNode(ABC):
 
         Args:
             param (dict): The dictionary to update node_config with.
-            overwrite (bool): Flag indicating if the values of node_config should be overwritten if their value is not None.
+            overwrite (bool): Flag indicating if the values of node_config
+            should be overwritten if their value is not None.
         """
-        
         for key, val in params.items():
             if hasattr(self, key) and not overwrite:
                 continue
@@ -113,7 +114,7 @@ class BaseNode(ABC):
             self._validate_input_keys(input_keys)
             return input_keys
         except ValueError as e:
-            raise ValueError(f"Error parsing input keys for {self.node_name}: {str(e)}")
+            raise ValueError(f"Error parsing input keys for {self.node_name}") from e
 
     def _validate_input_keys(self, input_keys):
         """
@@ -134,7 +135,8 @@ class BaseNode(ABC):
 
     def _parse_input_keys(self, state: dict, expression: str) -> List[str]:
         """
-        Parses the input keys expression to extract relevant keys from the state based on logical conditions.
+        Parses the input keys expression to extract
+        relevant keys from the state based on logical conditions.
         The expression can contain AND (&), OR (|), and parentheses to group conditions.
 
         Args:
@@ -148,11 +150,9 @@ class BaseNode(ABC):
             ValueError: If the expression is invalid or if no state keys match the expression.
         """
 
-        # Check for empty expression
         if not expression:
             raise ValueError("Empty expression.")
 
-        # Check for adjacent state keys without an operator between them
         pattern = (
             r"\b("
             + "|".join(re.escape(key) for key in state.keys())
@@ -165,10 +165,8 @@ class BaseNode(ABC):
                 "Adjacent state keys found without an operator between them."
             )
 
-        # Remove spaces
         expression = expression.replace(" ", "")
 
-        # Check for operators with empty adjacent tokens or at the start/end
         if (
             expression[0] in "&|"
             or expression[-1] in "&|"
@@ -179,7 +177,6 @@ class BaseNode(ABC):
         ):
             raise ValueError("Invalid operator usage.")
 
-        # Check for balanced parentheses and valid operator placement
         open_parentheses = close_parentheses = 0
         for i, char in enumerate(expression):
             if char == "(":
@@ -192,18 +189,13 @@ class BaseNode(ABC):
                     "Invalid operator placement: operators cannot be adjacent."
                 )
 
-        # Check for missing or balanced parentheses
         if open_parentheses != close_parentheses:
             raise ValueError("Missing or unbalanced parentheses in expression.")
 
-        # Helper function to evaluate an expression without parentheses
         def evaluate_simple_expression(exp: str) -> List[str]:
             """Evaluate an expression without parentheses."""
 
-            # Split the expression by the OR operator and process each segment
             for or_segment in exp.split("|"):
-
-                # Check if all elements in an AND segment are in state
                 and_segment = or_segment.split("&")
                 if all(elem.strip() in state for elem in and_segment):
                     return [
@@ -211,7 +203,6 @@ class BaseNode(ABC):
                     ]
             return []
 
-        # Helper function to evaluate expressions with parentheses
         def evaluate_expression(expression: str) -> List[str]:
             """Evaluate an expression with parentheses."""
 
@@ -220,10 +211,8 @@ class BaseNode(ABC):
                 end = expression.find(")", start)
                 sub_exp = expression[start + 1 : end]
 
-                # Replace the evaluated part with a placeholder and then evaluate it
                 sub_result = evaluate_simple_expression(sub_exp)
 
-                # For simplicity in handling, join sub-results with OR to reprocess them later
                 expression = (
                     expression[:start] + "|".join(sub_result) + expression[end + 1 :]
                 )
@@ -232,9 +221,12 @@ class BaseNode(ABC):
         result = evaluate_expression(expression)
 
         if not result:
-            raise ValueError("No state keys matched the expression.")
+            raise ValueError(
+                f"""No state keys matched the expression.
+                             Expression was {expression}.
+                             State contains keys: {", ".join(state.keys())}"""
+            )
 
-        # Remove redundant state keys from the result, without changing their order
         final_result = []
         for key in result:
             if key not in final_result:

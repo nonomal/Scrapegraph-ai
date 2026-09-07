@@ -1,24 +1,55 @@
+## 🚀 **Looking for an even faster and simpler way to scrape at scale (only 5 lines of code)?** Check out our enhanced version at [**ScrapeGraphAI.com**](https://scrapegraphai.com/?utm_source=github&utm_medium=readme&utm_campaign=oss_cta&ut#m_content=top_banner)! 🚀
+
+---
 
 # 🕷️ ScrapeGraphAI: You Only Scrape Once
-[English](https://github.com/VinciGit00/Scrapegraph-ai/blob/main/README.md) | [中文](https://github.com/VinciGit00/Scrapegraph-ai/blob/main/docs/chinese.md) | [日本語](https://github.com/VinciGit00/Scrapegraph-ai/blob/main/docs/japanese.md)
-| [코리아노](https://github.com/VinciGit00/Scrapegraph-ai/blob/main/docs/korean.md)
-| [Русский](https://github.com/VinciGit00/Scrapegraph-ai/blob/main/docs/russian.md)
 
+<p align="center">
+  <a href="https://scrapegraphai.com">
+    <img src="media/banner.png" alt="ScrapeGraphAI" style="width: 100%;">
+  </a>
+</p>
 
-[![Downloads](https://img.shields.io/pepy/dt/scrapegraphai?style=for-the-badge)](https://pepy.tech/project/scrapegraphai)
-[![linting: pylint](https://img.shields.io/badge/linting-pylint-yellowgreen?style=for-the-badge)](https://github.com/pylint-dev/pylint)
-[![Pylint](https://img.shields.io/github/actions/workflow/status/VinciGit00/Scrapegraph-ai/pylint.yml?label=Pylint&logo=github&style=for-the-badge)](https://github.com/VinciGit00/Scrapegraph-ai/actions/workflows/pylint.yml)
-[![CodeQL](https://img.shields.io/github/actions/workflow/status/VinciGit00/Scrapegraph-ai/codeql.yml?label=CodeQL&logo=github&style=for-the-badge)](https://github.com/VinciGit00/Scrapegraph-ai/actions/workflows/codeql.yml)
+[English](README.md) | [中文](docs/chinese.md) | [日本語](docs/japanese.md)
+| [한국어](docs/korean.md)
+| [Русский](docs/russian.md) | [Türkçe](docs/turkish.md)
+| [Deutsch](docs/german.md)
+| [Español](docs/spanish.md)
+| [français](docs/french.md)
+| [Português](docs/portuguese.md)
+| [Italiano](docs/italian.md)
+
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/scrapegraphai?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/scrapegraphai)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![](https://dcbadge.vercel.app/api/server/gkxQDAjfeX)](https://discord.gg/gkxQDAjfeX)
 
-ScrapeGraphAI is a *web scraping* python library that uses LLM and direct graph logic to create scraping pipelines for websites and local documents (XML, HTML, JSON, etc.).
+<p align="center">
+<a href="https://trendshift.io/repositories/15078" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15078" alt="ScrapeGraphAI%2FScrapegraph-ai | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+<p align="center">
+
+[ScrapeGraphAI](https://scrapegraphai.com) is a *web scraping* python library that uses LLM and direct graph logic to create scraping pipelines for websites and local documents (XML, HTML, JSON, Markdown, etc.).
 
 Just say which information you want to extract and the library will do it for you!
 
+## 🚀 Integrations
+ScrapeGraphAI offers seamless integration with popular frameworks and tools to enhance your scraping capabilities. Whether you're building with Python or Node.js, using LLM frameworks, or working with no-code platforms, we've got you covered with our comprehensive integration options..
+
 <p align="center">
-  <img src="https://raw.githubusercontent.com/VinciGit00/Scrapegraph-ai/main/docs/assets/scrapegraphai_logo.png" alt="Scrapegraph-ai Logo" style="width: 50%;">
+  <a href="https://scrapegraphai.com">
+    <img src="https://raw.githubusercontent.com/ScrapeGraphAI/.github/main/profile/assets/api_banner.png" alt="Web data extraction at scale? Try ScrapeGraphAI cloud" style="width: 100%;">
+  </a>
 </p>
+
+You can find more informations at the following [link](https://scrapegraphai.com)
+
+**Integrations**:
+- **API**: [Documentation](https://docs.scrapegraphai.com/introduction)
+- **SDKs**: [Python](https://docs.scrapegraphai.com/sdks/python), [Node](https://docs.scrapegraphai.com/sdks/javascript)
+- **LLM Frameworks**: [Langchain](https://docs.scrapegraphai.com/integrations/langchain), [Llama Index](https://docs.scrapegraphai.com/integrations/llamaindex), [Crew.ai](https://docs.scrapegraphai.com/integrations/crewai), [Agno](https://docs.scrapegraphai.com/integrations/agno), [CamelAI](https://github.com/camel-ai/camel)
+- **Low-code Frameworks**: [Pipedream](https://pipedream.com/apps/scrapegraphai), [Bubble](https://bubble.io/plugin/scrapegraphai-1745408893195x213542371433906180), [Zapier](https://zapier.com/apps/scrapegraphai/integrations), [n8n](http://localhost:5001/dashboard), [Dify](https://dify.ai), [Toolhouse](https://app.toolhouse.ai/mcp-servers/scrapegraph_smartscraper)
+- **MCP server**:  [Link](https://smithery.ai/server/@ScrapeGraphAI/scrapegraph-mcp)
+
 
 ## 🚀 Quick install
 
@@ -26,230 +57,204 @@ The reference page for Scrapegraph-ai is available on the official page of PyPI:
 
 ```bash
 pip install scrapegraphai
+
+# IMPORTANT (for fetching websites content)
+playwright install
 ```
 
 **Note**: it is recommended to install the library in a virtual environment to avoid conflicts with other libraries 🐱
 
-## 🔍 Demo
-Official streamlit demo:
-
-[![My Skills](https://skillicons.dev/icons?i=react)](https://scrapegraph-ai-web-dashboard.streamlit.app)
-
-Try it directly on the web using Google Colab:
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1sEZBonBMGP44CtO6GQTwAlL0BGJXjtfd?usp=sharing)
-
-## 📖 Documentation
-
-The documentation for ScrapeGraphAI can be found [here](https://scrapegraph-ai.readthedocs.io/en/latest/).
-
-Check out also the Docusaurus [here](https://scrapegraph-doc.onrender.com/).
 
 ## 💻 Usage
-There are multiple standard scraping pipelines that can be used to extract information from a website (or local file):
-- `SmartScraperGraph`: single-page scraper that only needs a user prompt and an input source;
-- `SearchGraph`: multi-page scraper that extracts information from the top n search results of a search engine;
-- `SpeechGraph`: single-page scraper that extracts information from a website and generates an audio file.
-- `ScriptCreatorGraph`: single-page scraper that extracts information from a website and generates a Python script.
+There are multiple standard scraping pipelines that can be used to extract information from a website (or local file).
 
-- `SmartScraperMultiGraph`: multi-page scraper that extracts information from multiple pages given a single prompt and a list of sources;
-- `ScriptCreatorMultiGraph`: multi-page scraper that generates a Python script for extracting information from multiple pages given a single prompt and a list of sources.
+The most common one is the `SmartScraperGraph`, which extracts information from a single page given a user prompt and a source URL.
 
-It is possible to use different LLM through APIs, such as **OpenAI**, **Groq**, **Azure** and **Gemini**, or local models using **Ollama**.
-
-### Case 1: SmartScraper using Local Models
-
-Remember to have [Ollama](https://ollama.com/) installed and download the models using the **ollama pull** command.
 
 ```python
 from scrapegraphai.graphs import SmartScraperGraph
 
+# Define the configuration for the scraping pipeline
 graph_config = {
     "llm": {
-        "model": "ollama/mistral",
-        "temperature": 0,
-        "format": "json",  # Ollama needs the format to be specified explicitly
-        "base_url": "http://localhost:11434",  # set Ollama URL
-    },
-    "embeddings": {
-        "model": "ollama/nomic-embed-text",
-        "base_url": "http://localhost:11434",  # set Ollama URL
+        "model": "ollama/llama3.2",
+        "model_tokens": 8192,
+        "format": "json",
     },
     "verbose": True,
+    "headless": False,
 }
 
+# Create the SmartScraperGraph instance
 smart_scraper_graph = SmartScraperGraph(
-    prompt="List me all the projects with their descriptions",
-    # also accepts a string with the already downloaded HTML code
-    source="https://perinim.github.io/projects",
+    prompt="Extract useful information from the webpage, including a description of what the company does, founders and social media links",
+    source="https://scrapegraphai.com/",
     config=graph_config
 )
 
+# Run the pipeline
 result = smart_scraper_graph.run()
-print(result)
 
+import json
+print(json.dumps(result, indent=4))
 ```
 
-The output will be a list of projects with their descriptions like the following:
+> [!NOTE]
+> For OpenAI and other models you just need to change the llm config!
+> ```python
+>graph_config = {
+>    "llm": {
+>        "api_key": "YOUR_OPENAI_API_KEY",
+>        "model": "openai/gpt-4o-mini",
+>    },
+>    "verbose": True,
+>    "headless": False,
+>}
+>```
+
+
+The output will be a dictionary like the following:
 
 ```python
-{'projects': [{'title': 'Rotary Pendulum RL', 'description': 'Open Source project aimed at controlling a real life rotary pendulum using RL algorithms'}, {'title': 'DQN Implementation from scratch', 'description': 'Developed a Deep Q-Network algorithm to train a simple and double pendulum'}, ...]}
-```
-
-### Case 2: SearchGraph using Mixed Models
-
-We use **Groq** for the LLM and **Ollama** for the embeddings.
-
-```python
-from scrapegraphai.graphs import SearchGraph
-
-# Define the configuration for the graph
-graph_config = {
-    "llm": {
-        "model": "groq/gemma-7b-it",
-        "api_key": "GROQ_API_KEY",
-        "temperature": 0
-    },
-    "embeddings": {
-        "model": "ollama/nomic-embed-text",
-        "base_url": "http://localhost:11434",  # set ollama URL arbitrarily
-    },
-    "max_results": 5,
+{
+    "description": "ScrapeGraphAI transforms websites into clean, organized data for AI agents and data analytics. It offers an AI-powered API for effortless and cost-effective data extraction.",
+    "founders": [
+        {
+            "name": "",
+            "role": "Founder & Technical Lead",
+            "linkedin": "https://www.linkedin.com/in/perinim/"
+        },
+        {
+            "name": "Marco Vinciguerra",
+            "role": "Founder & Software Engineer",
+            "linkedin": "https://www.linkedin.com/in/marco-vinciguerra-7ba365242/"
+        },
+        {
+            "name": "Lorenzo Padoan",
+            "role": "Founder & Product Engineer",
+            "linkedin": "https://www.linkedin.com/in/lorenzo-padoan-4521a2154/"
+        }
+    ],
+    "social_media_links": {
+        "linkedin": "https://www.linkedin.com/company/101881123",
+        "twitter": "https://x.com/scrapegraphai",
+        "github": "https://github.com/ScrapeGraphAI/Scrapegraph-ai"
+    }
 }
-
-# Create the SearchGraph instance
-search_graph = SearchGraph(
-    prompt="List me all the traditional recipes from Chioggia",
-    config=graph_config
-)
-
-# Run the graph
-result = search_graph.run()
-print(result)
 ```
+There are other pipelines that can be used to extract information from multiple pages, generate Python scripts, or even generate audio files.
 
-The output will be a list of recipes like the following:
+| Pipeline Name           | Description                                                                                                      |
+|-------------------------|------------------------------------------------------------------------------------------------------------------|
+| SmartScraperGraph       | Single-page scraper that only needs a user prompt and an input source.                                           |
+| SearchGraph             | Multi-page scraper that extracts information from the top n search results of a search engine.                  |
+| SpeechGraph             | Single-page scraper that extracts information from a website and generates an audio file.                       |
+| ScriptCreatorGraph      | Single-page scraper that extracts information from a website and generates a Python script.                     |
+| SmartScraperMultiGraph  | Multi-page scraper that extracts information from multiple pages given a single prompt and a list of sources.    |
+| ScriptCreatorMultiGraph | Multi-page scraper that generates a Python script for extracting information from multiple pages and sources.     |
 
-```python
-{'recipes': [{'name': 'Sarde in Saòre'}, {'name': 'Bigoli in salsa'}, {'name': 'Seppie in umido'}, {'name': 'Moleche frite'}, {'name': 'Risotto alla pescatora'}, {'name': 'Broeto'}, {'name': 'Bibarasse in Cassopipa'}, {'name': 'Risi e bisi'}, {'name': 'Smegiassa Ciosota'}]}
-```
-### Case 3: SpeechGraph using OpenAI
+For each of these graphs there is the multi version. It allows to make calls of the LLM in parallel.
 
-You just need to pass the OpenAI API key and the model name.
+It is possible to use different LLM through APIs, such as **OpenAI**, **Groq**, **Azure**, **Gemini**, **[MiniMax](docs/minimax.md)** and more, or local models using **Ollama**.
 
-```python
-from scrapegraphai.graphs import SpeechGraph
+Remember to have [Ollama](https://ollama.com/) installed and download the models using the **ollama pull** command, if you want to use local models.
 
-graph_config = {
-    "llm": {
-        "api_key": "OPENAI_API_KEY",
-        "model": "gpt-3.5-turbo",
-    },
-    "tts_model": {
-        "api_key": "OPENAI_API_KEY",
-        "model": "tts-1",
-        "voice": "alloy"
-    },
-    "output_path": "audio_summary.mp3",
-}
 
-# ************************************************
-# Create the SpeechGraph instance and run it
-# ************************************************
+## 📖 Documentation
 
-speech_graph = SpeechGraph(
-    prompt="Make a detailed audio summary of the projects.",
-    source="https://perinim.github.io/projects/",
-    config=graph_config,
-)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1sEZBonBMGP44CtO6GQTwAlL0BGJXjtfd?usp=sharing)
 
-result = speech_graph.run()
-print(result)
+The documentation for ScrapeGraphAI can be found [here](https://docs.scrapegraphai.com/introduction).
+## 🆚 Open Source vs Managed API
 
-```
+ScrapeGraphAI comes in two flavours: **this open-source library**, which you run yourself, and the **managed cloud API** (used via the [Python](https://github.com/ScrapeGraphAI/scrapegraph-py) and [JS/TS](https://github.com/ScrapeGraphAI/scrapegraph-js) SDKs). This table explains the difference so you can pick the right one.
 
-The output will be an audio file with the summary of the projects on the page.
+| | Open Source (`scrapegraphai`) | Managed API (`scrapegraph-py` / `scrapegraph-js`) |
+|---|---|---|
+| **What it is** | A Python library you run yourself | A hosted cloud service you call via SDK |
+| **Where it runs** | Your own infrastructure (self-hosted) | ScrapeGraphAI cloud |
+| **LLM** | Bring your own (OpenAI, Groq, Gemini, Azure, local via Ollama) | Managed for you |
+| **Browser / JS rendering** | You configure it (Playwright) | Managed (stealth, `auto`/`fast`/`js` modes) |
+| **Proxies & anti-bot** | Your responsibility | Included |
+| **Scaling & maintenance** | Your responsibility | Fully managed |
+| **Cost model** | LLM tokens + your own infra | Pay-as-you-go credits |
+| **Auth** | Your own LLM keys | `SGAI_API_KEY` |
+| **Capabilities** | Graph pipelines (SmartScraper, Search, Speech, ScriptCreator…) | Scrape, Extract, Search, Crawl, Monitor, History |
+| **Setup effort** | More configuration | Minimal — API key + one call |
+| **License** | MIT | SDK is MIT; the API service is paid |
 
-## Sponsors
-<div style="text-align: center;">
-  <a href="https://serpapi.com?utm_source=scrapegraphai">
-    <img src="https://raw.githubusercontent.com/VinciGit00/Scrapegraph-ai/main/docs/assets/serp_api_logo.png" alt="SerpAPI" style="width: 10%;">
-  </a>
-  <a href="https://dashboard.statproxies.com/?refferal=scrapegraph">
-    <img src="https://raw.githubusercontent.com/VinciGit00/Scrapegraph-ai/main/docs/assets/transparent_stat.png" alt="Stats" style="width: 15%;">
-  </a>
-</div>
+**Choose the open-source library** if you want full control, on-prem/self-hosted data, local LLMs (Ollama), or fine-grained cost tuning — and you're happy to manage browsers, proxies and scaling yourself.
+
+**Choose the managed API** if you want zero infrastructure, managed JS rendering & anti-bot, built-in **Crawl** and scheduled **Monitor** jobs, and the fastest path to production — billed per credit.
+
+- Open-source library: https://github.com/ScrapeGraphAI/Scrapegraph-ai
+- Python SDK: https://github.com/ScrapeGraphAI/scrapegraph-py
+- JS/TS SDK: https://github.com/ScrapeGraphAI/scrapegraph-js
+- API docs: https://docs.scrapegraphai.com/introduction
+
+## 🏆 Sponsors
+
+[![NodeMaven](docs/assets/nodemaven-banner.png)](https://go.nodemaven.com/scrapegraphyai)
+
+Codes for ScrapeGraphAI users: `SCRAPEGRAPH35` (35% off mobile and residential proxies), `SCRAPEGRAPH40` (40% off ISP / static proxies).
 
 ## 🤝 Contributing
 
 Feel free to contribute and join our Discord server to discuss with us improvements and give us suggestions!
 
-Please see the [contributing guidelines](https://github.com/VinciGit00/Scrapegraph-ai/blob/main/CONTRIBUTING.md).
+Please see the [contributing guidelines](https://github.com/ScrapeGraphAI/Scrapegraph-ai/blob/main/CONTRIBUTING.md).
 
 [![My Skills](https://skillicons.dev/icons?i=discord)](https://discord.gg/uJN7TYcpNa)
 [![My Skills](https://skillicons.dev/icons?i=linkedin)](https://www.linkedin.com/company/scrapegraphai/)
 [![My Skills](https://skillicons.dev/icons?i=twitter)](https://twitter.com/scrapegraphai)
 
-## 📈 Roadmap
+## 🔗 ScrapeGraph API & SDKs
+If you are looking for a quick solution to integrate ScrapeGraph in your system, check out our powerful API [here!](https://scrapegraphai.com)
 
-We are working on the following features! If you are interested in collaborating right-click on the feature and open in a new tab to file a PR. If you have doubts and wanna discuss them with us, just contact us on [discord](https://discord.gg/uJN7TYcpNa) or open a [Discussion](https://github.com/VinciGit00/Scrapegraph-ai/discussions) here on Github!
+[![API Banner](https://raw.githubusercontent.com/ScrapeGraphAI/Scrapegraph-ai/main/docs/assets/api_banner.png)](https://scrapegraphai.com)
 
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#5C4B9B', 'edgeLabelBackground':'#ffffff', 'tertiaryColor': '#ffffff', 'primaryBorderColor': '#5C4B9B', 'fontFamily': 'Arial', 'fontSize': '16px', 'textColor': '#5C4B9B' }}}%%
-graph LR
-    A[DeepSearch Graph] --> F[Use Existing Chromium Instances]
-    F --> B[Page Caching]
-    B --> C[Screenshot Scraping]
-    C --> D[Handle Dynamic Content]
-    D --> E[New Webdrivers]
+We offer SDKs in both Python and Node.js, making it easy to integrate into your projects. Check them out below:
 
-    style A fill:#ffffff,stroke:#5C4B9B,stroke-width:2px,rx:10,ry:10
-    style F fill:#ffffff,stroke:#5C4B9B,stroke-width:2px,rx:10,ry:10
-    style B fill:#ffffff,stroke:#5C4B9B,stroke-width:2px,rx:10,ry:10
-    style C fill:#ffffff,stroke:#5C4B9B,stroke-width:2px,rx:10,ry:10
-    style D fill:#ffffff,stroke:#5C4B9B,stroke-width:2px,rx:10,ry:10
-    style E fill:#ffffff,stroke:#5C4B9B,stroke-width:2px,rx:10,ry:10
+| SDK       | Language | GitHub Link                                                                 |
+|-----------|----------|-----------------------------------------------------------------------------|
+| Python SDK | Python   | [scrapegraph-py](https://docs.scrapegraphai.com/sdks/python) |
+| Node.js SDK | Node.js  | [scrapegraph-js](https://docs.scrapegraphai.com/sdks/javascript) |
 
-    click A href "https://github.com/VinciGit00/Scrapegraph-ai/issues/260" "Open DeepSearch Graph Issue"
-    click F href "https://github.com/VinciGit00/Scrapegraph-ai/issues/329" "Open Chromium Instances Issue"
-    click B href "https://github.com/VinciGit00/Scrapegraph-ai/issues/197" "Open Page Caching Issue"
-    click C href "https://github.com/VinciGit00/Scrapegraph-ai/issues/197" "Open Screenshot Scraping Issue"
-    click D href "https://github.com/VinciGit00/Scrapegraph-ai/issues/279" "Open Handle Dynamic Content Issue"
-    click E href "https://github.com/VinciGit00/Scrapegraph-ai/issues/171" "Open New Webdrivers Issue"
-```
+The Official API Documentation can be found [here](https://docs.scrapegraphai.com/introduction).
+
+## 📈 Telemetry
+We collect anonymous usage metrics to enhance our package's quality and user experience. The data helps us prioritize improvements and ensure compatibility. If you wish to opt-out, set the environment variable SCRAPEGRAPHAI_TELEMETRY_ENABLED=false. For more information, please refer to the documentation [here](https://docs.scrapegraphai.com/introduction).
 
 ## ❤️ Contributors
-[![Contributors](https://contrib.rocks/image?repo=VinciGit00/Scrapegraph-ai)](https://github.com/VinciGit00/Scrapegraph-ai/graphs/contributors)
+[![Contributors](https://contrib.rocks/image?repo=ScrapeGraphAI/Scrapegraph-ai)](https://github.com/ScrapeGraphAI/Scrapegraph-ai/graphs/contributors)
 
 ## 🎓 Citations
 If you have used our library for research purposes please quote us with the following reference:
 ```text
   @misc{scrapegraph-ai,
-    author = {Marco Perini, Lorenzo Padoan, Marco Vinciguerra},
+    author = {Lorenzo Padoan, Marco Vinciguerra},
     title = {Scrapegraph-ai},
     year = {2024},
-    url = {https://github.com/VinciGit00/Scrapegraph-ai},
+    url = {https://github.com/ScrapeGraphAI/Scrapegraph-ai},
     note = {A Python library for scraping leveraging large language models}
   }
 ```
-
 ## Authors
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/VinciGit00/Scrapegraph-ai/main/docs/assets/logo_authors.png" alt="Authors_logos">
-</p>
 
 |                    | Contact Info         |
 |--------------------|----------------------|
 | Marco Vinciguerra  | [![Linkedin Badge](https://img.shields.io/badge/-Linkedin-blue?style=flat&logo=Linkedin&logoColor=white)](https://www.linkedin.com/in/marco-vinciguerra-7ba365242/)    |
-| Marco Perini       | [![Linkedin Badge](https://img.shields.io/badge/-Linkedin-blue?style=flat&logo=Linkedin&logoColor=white)](https://www.linkedin.com/in/perinim/)   |
 | Lorenzo Padoan     | [![Linkedin Badge](https://img.shields.io/badge/-Linkedin-blue?style=flat&logo=Linkedin&logoColor=white)](https://www.linkedin.com/in/lorenzo-padoan-4521a2154/)  |
 
 ## 📜 License
 
-ScrapeGraphAI is licensed under the MIT License. See the [LICENSE](https://github.com/VinciGit00/Scrapegraph-ai/blob/main/LICENSE) file for more information.
+ScrapeGraphAI is licensed under the MIT License. See the [LICENSE](https://github.com/ScrapeGraphAI/Scrapegraph-ai/blob/main/LICENSE) file for more information.
 
 ## Acknowledgements
 
 - We would like to thank all the contributors to the project and the open-source community for their support.
 - ScrapeGraphAI is meant to be used for data exploration and research purposes only. We are not responsible for any misuse of the library.
+
+Made with ❤️ by [ScrapeGraph AI](https://scrapegraphai.com)
+
+[Scarf tracking](https://static.scarf.sh/a.png?x-pxid=102d4b8c-cd6a-4b9e-9a16-d6d141b9212d)
